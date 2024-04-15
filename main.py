@@ -62,26 +62,26 @@ class MyClient(discord.Client):
         """
         pass
             
-# incase program is signal to end, save the last boot time
+# Incase program is signal to end, save the last boot time
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
-# set up intents
+# Set up intents
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.voice_states = True
 
-# create client
+# Create client
 client = MyClient(intents=intents)
 
 try:
-    # run the bot
+    # Run the bot
     load_dotenv(override=True)
     client.run(os.getenv("BOT_TOKEN"))
 except Exception as e:
     print(f'EXCEPTION: exception encountered -> {e}')
 finally:
-    # save the last boot time
+    # Save the last boot time
     save_last_boot_time()
         
