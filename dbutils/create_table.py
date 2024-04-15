@@ -5,6 +5,7 @@ create_table_query = """
 CREATE TABLE IF NOT EXISTS DiscordMessages (
     id INTEGER PRIMARY KEY,
     record_inserted_timestamp DATETIME,
+    message_id INTEGER,
     message_timestamp DATETIME,
     user_id INTEGER,
     user_name TEXT,

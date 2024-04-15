@@ -54,6 +54,13 @@ class MyClient(discord.Client):
             return
         else:
             await insert_message(message)
+    
+    async def on_edit(self, before, after):
+        """
+        TODO: Log when the user edits a message and save this
+        to a seperate table.
+        """
+        pass
             
 # incase program is signal to end, save the last boot time
 signal.signal(signal.SIGINT, signal_handler)

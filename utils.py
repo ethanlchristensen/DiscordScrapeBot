@@ -7,6 +7,7 @@ import datetime
 
 def insert_record(data: dict[str, any]):
     assert 'message_timestamp' in data, '"message_timestamp" must be provided'
+    assert 'message_id' in data, '"message_id" must be provided'
     assert 'user_id' in data, '"user_id" must be provided'
     assert 'user_name' in data, '"user_name" must be provided'
     assert 'channel_id' in data, '"channel_id" must be provided'
@@ -20,8 +21,8 @@ def insert_record(data: dict[str, any]):
     cursor = conn.cursor()
     
     insert_query = """
-    INSERT INTO DiscordMessages (record_inserted_timestamp, message_timestamp, user_id, user_name, channel_id, channel_name, message_text, message_image_url)
-    VALUES (:record_inserted_timestamp, :message_timestamp, :user_id, :user_name, :channel_id, :channel_name, :message_text, :message_image_url);
+    INSERT INTO DiscordMessages (record_inserted_timestamp, message_timestamp, message_id, user_id, user_name, channel_id, channel_name, message_text, message_image_url)
+    VALUES (:record_inserted_timestamp, :message_timestamp, :message_id, :user_id, :user_name, :channel_id, :channel_name, :message_text, :message_image_url);
     """
     
     try:
@@ -53,12 +54,14 @@ async def grab_old_messages(client: discord.Client, last_boot_time):
                 user_id = message.author.id
                 user_name = message.author.global_name
                 message_timestamp = message.created_at
+                message_id = message.id
                 channel_id = channel.id
                 channel_name = channel.name
                 message_text = message.content
             
                 insert_record({
                     'message_timestamp': message_timestamp,
+                    'message_id': message_id,
                     'user_id': user_id,
                     'user_name': user_name,
                     'channel_id': channel_id,
@@ -79,6 +82,7 @@ async def grab_old_messages(client: discord.Client, last_boot_time):
 async def insert_message(message: discord.Message):
     user_name = None
     message_timestamp = None
+    message_id = message.id
     channel_id = None
     channel_name = None
     message_text = None
@@ -98,6 +102,7 @@ async def insert_message(message: discord.Message):
         
         insert_record({
             'message_timestamp': message_timestamp,
+            'message_id': message_id,
             'user_id': user_id,
             'user_name': user_name,
             'channel_id': channel_id,
