@@ -13,7 +13,7 @@ def insert_record(data: dict[str, any]):
     assert 'channel_id' in data, '"channel_id" must be provided'
     assert 'channel_name' in data, '"channel_name" must be provided'
     assert 'message_text' in data, '"message_text" must be provided'
-    assert 'message_image_url' in data, '"message_image_url" must be provided'
+    assert 'message_file_urls' in data, '"message_file_urls" must be provided'
     
     data['record_inserted_timestamp'] = datetime.datetime.now(datetime.UTC)
     
@@ -21,8 +21,8 @@ def insert_record(data: dict[str, any]):
     cursor = conn.cursor()
     
     insert_query = """
-    INSERT INTO DiscordMessages (record_inserted_timestamp, message_timestamp, message_id, user_id, user_name, channel_id, channel_name, message_text, message_image_url)
-    VALUES (:record_inserted_timestamp, :message_timestamp, :message_id, :user_id, :user_name, :channel_id, :channel_name, :message_text, :message_image_url);
+    INSERT INTO DiscordMessages (record_inserted_timestamp, message_timestamp, message_id, user_id, user_name, channel_id, channel_name, message_text, message_file_urls)
+    VALUES (:record_inserted_timestamp, :message_timestamp, :message_id, :user_id, :user_name, :channel_id, :channel_name, :message_text, :message_file_urls);
     """
     
     try:
@@ -43,16 +43,24 @@ async def grab_old_messages(client: discord.Client, last_boot_time):
         channel_id = None
         channel_name = None
         message_text = None
-        message_image_url = None
+        message_file_urls = None
         try:
             async for message in channel.history(limit=None, after=last_boot_time):
                 if message.attachments:
-                    message_image_url = message.attachments[0].url
-                if not message_image_url and message.embeds:
+                    for attachment in message.attachments:
+                        message_file_urls.append(attachment.url)
+                if message.embeds:
                     for embed in message.embeds:
                         if embed.image:
-                            message_image_url = embed.image.url
-                            break
+                            message_file_urls.append(embed.image.url)
+                if message.stickers:
+                    for sticker in message.stickers:
+                        message_file_urls.append(sticker.url)
+                if not message_file_urls:
+                    message_file_urls = None
+                else:
+                    message_file_urls = " | ".join(message_file_urls)
+                    
                 user_id = message.author.id
                 user_name = message.author.global_name
                 if not user_name: user_name = message.author.name
@@ -63,6 +71,11 @@ async def grab_old_messages(client: discord.Client, last_boot_time):
                 channel_id = channel.id
                 channel_name = channel.name
                 message_text = message.content
+                if message_text is None or message_text.strip() == '':
+                    if message.embeds:
+                        for embed in message.embeds:
+                            message_text = extract_text_from_embed(embed)
+                            break
             
                 insert_record({
                     'message_timestamp': message_timestamp,
@@ -72,7 +85,7 @@ async def grab_old_messages(client: discord.Client, last_boot_time):
                     'channel_id': channel_id,
                     'channel_name': channel_name,
                     'message_text': message_text,
-                    'message_image_url': message_image_url
+                    'message_file_urls': message_file_urls
                 })
                 
                 total_messages += 1
@@ -91,19 +104,36 @@ async def insert_message(message: discord.Message):
     channel_id = None
     channel_name = None
     message_text = None
-    message_image_url = None
+    message_file_urls = []
     try:
+        if message.attachments:
+            for attachment in message.attachments:
+                message_file_urls.append(attachment.url)
         if message.embeds:
             for embed in message.embeds:
                 if embed.image:
-                    message_image_url = embed.image.url
-                    break
+                    message_file_urls.append(embed.image.url)
+        if message.stickers:
+            for sticker in message.stickers:
+                message_file_urls.append(sticker.url)
+        
+        if not message_file_urls:
+            message_file_urls = None
+        else:
+            message_file_urls = " | ".join(message_file_urls)
+        
         user_id = message.author.id
         user_name = message.author.global_name
         message_timestamp = message.created_at
         channel_id = message.channel.id
         channel_name = message.channel.name
         message_text = message.content
+        
+        if message_text is None or message_text.strip() == '':
+            if message.embeds:
+                for embed in message.embeds:
+                    message_text = extract_text_from_embed(embed)
+                    break
         
         insert_record({
             'message_timestamp': message_timestamp,
@@ -113,7 +143,22 @@ async def insert_message(message: discord.Message):
             'channel_id': channel_id,
             'channel_name': channel_name,
             'message_text': message_text,
-            'message_image_url': message_image_url
+            'message_file_urls': message_file_urls
         })
     except Exception as e:
         print(f'ERROR: failed to insert new message into db: {e}')
+
+
+def extract_text_from_embed(embed):
+    full_text = ""
+    if embed.title:
+        full_text += embed.title + "\n"
+    if embed.description:
+        full_text += embed.description + "\n"
+    for field in embed.fields:
+        full_text += field.name + "\n" + field.value + "\n"
+    if embed.footer:
+        full_text += embed.footer.text + "\n"
+    if embed.author:
+        full_text += embed.author.name + "\n"
+    return full_text
