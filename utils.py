@@ -46,13 +46,18 @@ async def grab_old_messages(client: discord.Client, last_boot_time):
         message_image_url = None
         try:
             async for message in channel.history(limit=None, after=last_boot_time):
-                if message.embeds:
+                if message.attachments:
+                    message_image_url = message.attachments[0].url
+                if not message_image_url and message.embeds:
                     for embed in message.embeds:
                         if embed.image:
                             message_image_url = embed.image.url
                             break
                 user_id = message.author.id
                 user_name = message.author.global_name
+                if not user_name: user_name = message.author.name
+                if not user_name: user_name = message.author.display_name
+                if not user_name: user_name = "Unknown"
                 message_timestamp = message.created_at
                 message_id = message.id
                 channel_id = channel.id
