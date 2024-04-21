@@ -53,6 +53,7 @@ class MyClient(discord.Client):
         if message.author == self.user:
             return
         else:
+            print(f"Inserting message at {message.created_at} from {message.author} into the database.")
             await insert_message(message)
     
     async def on_edit(self, before, after):

@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS DiscordMessages (
     channel_name TEXT,
     channel_id INTEGER,
     message_text TEXT,
-    message_image_url TEXT
+    message_file_urls TEXT
 );
 """
 cursor.execute(create_table_query)

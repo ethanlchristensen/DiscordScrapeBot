@@ -13,7 +13,7 @@ def insert_record(data: dict[str, any]):
     assert 'channel_id' in data, '"channel_id" must be provided'
     assert 'channel_name' in data, '"channel_name" must be provided'
     assert 'message_text' in data, '"message_text" must be provided'
-    assert 'message_image_url' in data, '"message_image_url" must be provided'
+    assert 'message_file_urls' in data, '"message_file_urls" must be provided'
     
     data['record_inserted_timestamp'] = datetime.datetime.now(datetime.UTC)
     
@@ -21,8 +21,8 @@ def insert_record(data: dict[str, any]):
     cursor = conn.cursor()
     
     insert_query = """
-    INSERT INTO DiscordMessages (record_inserted_timestamp, message_timestamp, message_id, user_id, user_name, channel_id, channel_name, message_text, message_image_url)
-    VALUES (:record_inserted_timestamp, :message_timestamp, :message_id, :user_id, :user_name, :channel_id, :channel_name, :message_text, :message_image_url);
+    INSERT INTO DiscordMessages (record_inserted_timestamp, message_timestamp, message_id, user_id, user_name, channel_id, channel_name, message_text, message_file_urls)
+    VALUES (:record_inserted_timestamp, :message_timestamp, :message_id, :user_id, :user_name, :channel_id, :channel_name, :message_text, :message_file_urls);
     """
     
     try:
@@ -37,33 +37,41 @@ async def grab_old_messages(client: discord.Client, last_boot_time):
     guild = client.get_guild(int(os.getenv("GUILD_ID")))
     total_messages = 0
     for channel in guild.text_channels:
-        user_id = None
-        user_name = None
-        message_timestamp = None
-        channel_id = None
-        channel_name = None
-        message_text = None
-        message_image_url = None
         try:
             async for message in channel.history(limit=None, after=last_boot_time):
+                user_id = None
+                user_name = None
+                message_timestamp = None
+                message_id = None
+                channel_id = None
+                channel_name = None
+                message_text = ''
+                message_file_urls = []
                 if message.attachments:
-                    message_image_url = message.attachments[0].url
-                if not message_image_url and message.embeds:
+                    for attachment in message.attachments:
+                        message_file_urls.append(attachment.url)
+                if message.embeds:
                     for embed in message.embeds:
                         if embed.image:
-                            message_image_url = embed.image.url
-                            break
+                            message_file_urls.append(embed.image.url)
+                if message.stickers:
+                    for sticker in message.stickers:
+                        message_file_urls.append(sticker.url)
+                if not message_file_urls:
+                    message_file_urls = None
+                else:
+                    message_file_urls = " | ".join(message_file_urls)
+                    
                 user_id = message.author.id
-                user_name = message.author.global_name
-                if not user_name: user_name = message.author.name
-                if not user_name: user_name = message.author.display_name
-                if not user_name: user_name = "Unknown"
+                user_name = str(message.author)
                 message_timestamp = message.created_at
                 message_id = message.id
                 channel_id = channel.id
                 channel_name = channel.name
-                message_text = message.content
-            
+                message_text += f'MESSAGE_CONTENT={message.content}'
+                if message.embeds:
+                    for idx, embed in enumerate(message.embeds):
+                        message_text += f'EMBED{idx+1}_TEXT={extract_text_from_embed(embed)}'
                 insert_record({
                     'message_timestamp': message_timestamp,
                     'message_id': message_id,
@@ -72,11 +80,10 @@ async def grab_old_messages(client: discord.Client, last_boot_time):
                     'channel_id': channel_id,
                     'channel_name': channel_name,
                     'message_text': message_text,
-                    'message_image_url': message_image_url
+                    'message_file_urls': message_file_urls
                 })
-                
                 total_messages += 1
-            
+                print(f"Messages inserted into database: {total_messages: >6d}", end="\r")
         except discord.errors.Forbidden:
             print(f'Cannot access messages in {channel.name} of {guild.name}')
         except Exception as e:
@@ -85,25 +92,41 @@ async def grab_old_messages(client: discord.Client, last_boot_time):
     print(f'Total messages since last boot at {last_boot_time}: {total_messages}')
 
 async def insert_message(message: discord.Message):
+    user_id = None
     user_name = None
     message_timestamp = None
-    message_id = message.id
+    message_id = None
     channel_id = None
     channel_name = None
-    message_text = None
-    message_image_url = None
+    message_text = ''
+    message_file_urls = []
     try:
+        if message.attachments:
+            for attachment in message.attachments:
+                message_file_urls.append(attachment.url)
         if message.embeds:
             for embed in message.embeds:
                 if embed.image:
-                    message_image_url = embed.image.url
-                    break
+                    message_file_urls.append(embed.image.url)
+        if message.stickers:
+            for sticker in message.stickers:
+                message_file_urls.append(sticker.url)
+        
+        if not message_file_urls:
+            message_file_urls = None
+        else:
+            message_file_urls = " | ".join(message_file_urls)
+        
         user_id = message.author.id
-        user_name = message.author.global_name
+        user_name = str(message.author)
         message_timestamp = message.created_at
+        message_id = message.id
         channel_id = message.channel.id
         channel_name = message.channel.name
-        message_text = message.content
+        message_text = f'MESSAGE_CONTENT={message.content}'
+        if message.embeds:
+            for idx, embed in enumerate(message.embeds):
+                message_text += f'EMBED{idx+1}_TEXT={extract_text_from_embed(embed)}'
         
         insert_record({
             'message_timestamp': message_timestamp,
@@ -113,7 +136,22 @@ async def insert_message(message: discord.Message):
             'channel_id': channel_id,
             'channel_name': channel_name,
             'message_text': message_text,
-            'message_image_url': message_image_url
+            'message_file_urls': message_file_urls
         })
     except Exception as e:
         print(f'ERROR: failed to insert new message into db: {e}')
+
+
+def extract_text_from_embed(embed):
+    full_text = ""
+    if embed.title:
+        full_text += embed.title + "\n"
+    if embed.description:
+        full_text += embed.description + "\n"
+    for field in embed.fields:
+        full_text += field.name + "\n" + field.value + "\n"
+    if embed.footer:
+        full_text += embed.footer.text + "\n"
+    if embed.author:
+        full_text += embed.author.name + "\n"
+    return full_text
