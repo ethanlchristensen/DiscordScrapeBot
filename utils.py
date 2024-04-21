@@ -37,16 +37,6 @@ async def grab_old_messages(client: discord.Client, last_boot_time):
     guild = client.get_guild(int(os.getenv("GUILD_ID")))
     total_messages = 0
     for channel in guild.text_channels:
-<<<<<<< HEAD
-=======
-        user_id = None
-        user_name = None
-        message_timestamp = None
-        channel_id = None
-        channel_name = None
-        message_text = None
-        message_file_urls = None
->>>>>>> 8568b936325198f2e7c89959de8212b207191dc8
         try:
             async for message in channel.history(limit=None, after=last_boot_time):
                 user_id = None
@@ -78,20 +68,10 @@ async def grab_old_messages(client: discord.Client, last_boot_time):
                 message_id = message.id
                 channel_id = channel.id
                 channel_name = channel.name
-<<<<<<< HEAD
                 message_text += f'MESSAGE_CONTENT={message.content}'
                 if message.embeds:
                     for idx, embed in enumerate(message.embeds):
                         message_text += f'EMBED{idx+1}_TEXT={extract_text_from_embed(embed)}'
-=======
-                message_text = message.content
-                if message_text is None or message_text.strip() == '':
-                    if message.embeds:
-                        for embed in message.embeds:
-                            message_text = extract_text_from_embed(embed)
-                            break
-            
->>>>>>> 8568b936325198f2e7c89959de8212b207191dc8
                 insert_record({
                     'message_timestamp': message_timestamp,
                     'message_id': message_id,
@@ -118,11 +98,7 @@ async def insert_message(message: discord.Message):
     message_id = None
     channel_id = None
     channel_name = None
-<<<<<<< HEAD
     message_text = ''
-=======
-    message_text = None
->>>>>>> 8568b936325198f2e7c89959de8212b207191dc8
     message_file_urls = []
     try:
         if message.attachments:
