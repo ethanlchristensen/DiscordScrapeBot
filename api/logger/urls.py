@@ -1,10 +1,12 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import MessageViewSet
+from .views import MessageListView
 
 router = DefaultRouter()
 router.register(r'messages', MessageViewSet)
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path('api/', include(router.urls)),
+    path('messages/', MessageListView.as_view(), name='message-list'),
 ]

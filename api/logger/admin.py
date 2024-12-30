@@ -1,7 +1,6 @@
 from django.contrib import admin
 
 from .models import Message, Sticker, Embed, EmbedField, EmbedFooter, EmbedThumbnail, Attachment
-
 # Register your models here.
 admin.site.register(Message)
 admin.site.register(Sticker)

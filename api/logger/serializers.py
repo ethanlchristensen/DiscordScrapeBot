@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from .models import (
     Message,
+    MessageContentHistory,
+    MessageEmbedHistory,
     Attachment,
     Embed,
     EmbedFooter,
@@ -8,6 +10,10 @@ from .models import (
     EmbedField,
     Sticker,
 )
+from django.db import transaction
+from django.utils import timezone
+from django.core.serializers.json import DjangoJSONEncoder
+import json
 
 
 class EmbedFooterSerializer(serializers.ModelSerializer):
@@ -76,10 +82,23 @@ class StickerSerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
 
 
+class MessageContentHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MessageContentHistory
+        fields = ["content", "edited_at"]
+
+class MessageEmbedHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MessageEmbedHistory
+        fields = ["embed_data", "changed_at"]
+
+
 class MessageSerializer(serializers.ModelSerializer):
     attachments = AttachmentSerializer(many=True, required=False)
     embeds = EmbedSerializer(many=True, required=False)
     stickers = StickerSerializer(many=True, required=False)
+    content_history = MessageContentHistorySerializer(many=True, read_only=True)
+    embed_history = MessageEmbedHistorySerializer(many=True, read_only=True)
 
     class Meta:
         model = Message
@@ -96,6 +115,8 @@ class MessageSerializer(serializers.ModelSerializer):
             "attachments",
             "embeds",
             "stickers",
+            "content_history",
+            "embed_history"
         ]
 
     def create(self, validated_data):
@@ -119,8 +140,82 @@ class MessageSerializer(serializers.ModelSerializer):
             elif isinstance(sticker_data, dict):
                 sticker_id = sticker_data.get("id")
                 sticker, created = Sticker.objects.update_or_create(
-                    id=sticker_id,
-                    defaults=sticker_data
+                    id=sticker_id, defaults=sticker_data
                 )
                 message.stickers.add(sticker)
         return message
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        # Track content changes...
+        if (
+            "content" in validated_data
+            and instance.content != validated_data["content"]
+        ):
+            MessageContentHistory.objects.create(
+                message=instance, content=instance.content, edited_at=timezone.now()
+            )
+
+        # Handle attachments...
+        attachments_data = validated_data.pop("attachments", [])
+        instance.attachments.all().delete()
+        for attachment_data in attachments_data:
+            Attachment.objects.create(message=instance, **attachment_data)
+
+        # Handle stickers...
+        stickers_data = validated_data.pop("stickers", [])
+        instance.stickers.clear()
+        for sticker_data in stickers_data:
+            if isinstance(sticker_data, Sticker):
+                instance.stickers.add(sticker_data)
+            elif isinstance(sticker_data, dict):
+                sticker_id = sticker_data.get("id")
+                sticker, created = Sticker.objects.update_or_create(
+                    id=sticker_id, defaults=sticker_data
+                )
+                instance.stickers.add(sticker)
+
+        # Handle embeds
+        new_embeds_data = validated_data.pop("embeds", [])
+        
+        # Extract current embeds' relevant fields
+        current_embeds = list(
+            instance.embeds.values('type', 'title', 'color')
+        )
+
+        new_embeds = [
+            {key:embed[key] for key in ["type", "title", "color"]}
+            for embed in new_embeds_data
+        ]
+
+        # Check if relevant embed fields have changed
+        if current_embeds != new_embeds and new_embeds:
+            # Log history if they are different
+            current_embeds_json = json.dumps(current_embeds, cls=DjangoJSONEncoder)
+            MessageEmbedHistory.objects.create(
+                message=instance,
+                embed_data=current_embeds_json,
+                changed_at=timezone.now()
+            )
+
+        # Clear and add new embeds
+        instance.embeds.all().delete()
+        for embed_data in new_embeds_data:
+            embed_serializer = EmbedSerializer(data=embed_data)
+            if embed_serializer.is_valid(raise_exception=True):
+                embed_serializer.save(message=instance)
+
+        # Update other fields
+        instance.content = validated_data.get("content", instance.content)
+        instance.channel_id = validated_data.get("channel_id", instance.channel_id)
+        instance.channel_name = validated_data.get("channel_name", instance.channel_name)
+        instance.author_id = validated_data.get("author_id", instance.author_id)
+        instance.author_name = validated_data.get("author_name", instance.author_name)
+        instance.author_discriminator = validated_data.get(
+            "author_discriminator", instance.author_discriminator
+        )
+        instance.created_at = validated_data.get("created_at", instance.created_at)
+        instance.edited_at = validated_data.get("edited_at", instance.edited_at)
+
+        instance.save()
+        return instance

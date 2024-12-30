@@ -74,3 +74,19 @@ class Sticker(models.Model):
 
     def __str__(self):
         return f"Sticker {self.name}"
+    
+class MessageContentHistory(models.Model):
+    message = models.ForeignKey(Message, related_name="content_history", on_delete=models.CASCADE)
+    content = models.TextField(blank=True)
+    edited_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"History for Message {self.message.id} at {self.edited_at}"
+    
+class MessageEmbedHistory(models.Model):
+    message = models.ForeignKey(Message, related_name="embed_history", on_delete=models.CASCADE)
+    embed_data = models.JSONField()
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Embed History for Message {self.message.id} at {self.changed_at}"
