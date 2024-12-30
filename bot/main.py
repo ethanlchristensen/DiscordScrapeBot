@@ -39,6 +39,11 @@ class DiscordScrapeBot(discord.Client):
         self.logger_url = os.getenv("LOGGER_API_URL")
 
     def generate_message_payload(self, message: Message) -> dict:
+        embeds = [embed.to_dict() for embed in message.embeds]
+        for idx in range(len(embeds)):
+            if "color" not in embeds[idx]:
+                embeds[idx]["color"] = None
+
         message_data = {
             "id": message.id,
             "content": message.content,
@@ -60,7 +65,7 @@ class DiscordScrapeBot(discord.Client):
                 }
                 for attachment in message.attachments
             ],
-            "embeds": [embed.to_dict() for embed in message.embeds],
+            "embeds": embeds,
             "stickers": [
                 {"id": sticker.id, "name": sticker.name, "url": sticker.url}
                 for sticker in message.stickers
@@ -124,6 +129,11 @@ class DiscordScrapeBot(discord.Client):
 
         if message.author == self.user:
             return
+        
+        if message.guild.id != int(os.getenv("GUILD_ID")):
+            return
+        
+        logger.info(f"Message received from {message.author} in channel {message.channel}")
 
         message_data = self.generate_message_payload(message)
 
@@ -143,16 +153,27 @@ class DiscordScrapeBot(discord.Client):
                 f"Error encountered logging the data to the database: {response.text}"
             )
 
-    async def on_message_edit(self, before, after):
+    async def on_message_edit(self, before: Message, after: Message):
         """
         Detect when a user edits a message and log the changes.
         """
-
-        logger.info("on_message_edit event recieved!")
-
         if before.author == self.user:
             return
         
+        if before.guild.id != int(os.getenv("GUILD_ID")):
+            return
+        
+        if before.content != after.content or before.embeds != after.embeds:
+            updated_payload = self.generate_message_payload(after)
+            response = requests.put(
+                f"{self.logger_url}{after.id}/",
+                json.dumps(updated_payload),
+                headers={"Content-Type": "application/json"},
+            )
+            logger.info(
+                f"Logged message edit by {before.author} to database with status code of {response.status_code}"
+            )
+
 
 if __name__ == "__main__":
     load_dotenv(override=True)
