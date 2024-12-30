@@ -1,8 +1,10 @@
+from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from django.urls import path
-from .views import DiscordMessageViewSet
+from .views import MessageViewSet
 
 router = DefaultRouter()
-router.register(r'messages', DiscordMessageViewSet)
+router.register(r'messages', MessageViewSet)
 
-urlpatterns = router.urls
+urlpatterns = [
+    path('', include(router.urls)),
+]

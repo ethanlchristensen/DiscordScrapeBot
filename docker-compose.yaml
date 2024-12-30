@@ -1,0 +1,29 @@
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+      args:
+        - DJANGO_SUPERUSER_USERNAME=ethan
+        - DJANGO_SUPERUSER_PASSWORD=ethan
+        - DJANGO_SUPERUSER_EMAIL=ethanlchristensen@outlook.com
+        - progress=plain
+    container_name: discord-scrape-bot-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DJANGO_SUPERUSER_USERNAME=ethan
+      - DJANGO_SUPERUSER_PASSWORD=ethan
+      - DJANGO_SUPERUSER_EMAIL=ethanlchristensen@outlook.com
+  
+  discord-bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    container_name: discord-bot
+    env_file:
+      - bot/.env
+    volumes:
+      - ./bot:/bot
+    depends_on:
+      - api

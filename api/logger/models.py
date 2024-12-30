@@ -1,36 +1,76 @@
 from django.db import models
-from django.utils import timezone
 
-class DiscordMessage(models.Model):
-    message_id = models.CharField(max_length=100, unique=True)
-    channel_id = models.CharField(max_length=100)
-    guild_id = models.CharField(max_length=100)
-    author_id = models.CharField(max_length=100)
-    content = models.TextField()
-    created_at = models.DateTimeField(default=timezone.now)
-    
+
+class Message(models.Model):
+    id = models.BigIntegerField(primary_key=True)
+    content = models.TextField(blank=True)
+    channel_id = models.BigIntegerField()
+    channel_name = models.CharField(max_length=100)
+    author_id = models.BigIntegerField()
+    author_name = models.CharField(max_length=100)
+    author_discriminator = models.CharField(max_length=4)
+    created_at = models.DateTimeField()
+    edited_at = models.DateTimeField(null=True, blank=True)
+    stickers = models.ManyToManyField("Sticker", related_name="messages", blank=True)
+
     def __str__(self):
-        return f"Message {self.message_id} by {self.author_id}"
+        return f"Message {self.id} - {self.author_name}"
 
-class MessageEmbed(models.Model):
-    message = models.ForeignKey(DiscordMessage, related_name='embeds', on_delete=models.CASCADE)
-    title = models.CharField(max_length=256, null=True, blank=True)
-    description = models.TextField(null=True, blank=True)
-    url = models.URLField(max_length=500, null=True, blank=True)
-    color = models.IntegerField(null=True, blank=True)
-    timestamp = models.DateTimeField(null=True, blank=True)
 
-class MessageAttachment(models.Model):
-    message = models.ForeignKey(DiscordMessage, related_name='attachments', on_delete=models.CASCADE)
-    file_url = models.URLField(max_length=500)
-    filename = models.CharField(max_length=256)
-    content_type = models.CharField(max_length=100)
+class Attachment(models.Model):
+    message = models.ForeignKey(
+        Message, related_name="attachments", on_delete=models.CASCADE
+    )
+    id = models.BigIntegerField(primary_key=True)
+    url = models.TextField(blank=True)
+    filename = models.TextField()
     size = models.IntegerField()
 
-class MessageEdit(models.Model):
-    message = models.ForeignKey(DiscordMessage, related_name='edits', on_delete=models.CASCADE)
-    previous_content = models.TextField()
-    edited_at = models.DateTimeField(default=timezone.now)
+    def __str__(self):
+        return f"Attachment {self.filename} for Message {self.message.id}"
 
-    class Meta:
-        ordering = ['-edited_at']
+
+class Embed(models.Model):
+    message = models.ForeignKey(
+        Message, related_name="embeds", on_delete=models.CASCADE
+    )
+    type = models.CharField(max_length=50)
+    title = models.TextField(blank=True)
+    color = models.IntegerField(null=True)
+
+    def __str__(self):
+        return f"Embed {self.id} - {self.title}"
+
+
+class EmbedFooter(models.Model):
+    embed = models.OneToOneField(Embed, related_name="footer", on_delete=models.CASCADE)
+    text = models.TextField(blank=True)
+    icon_url = models.TextField(blank=True)
+    proxy_icon_url = models.TextField(blank=True)
+
+
+class EmbedThumbnail(models.Model):
+    embed = models.OneToOneField(
+        Embed, related_name="thumbnail", on_delete=models.CASCADE
+    )
+    url = models.TextField(blank=True)
+    proxy_url = models.TextField(blank=True)
+    width = models.IntegerField()
+    height = models.IntegerField()
+    flags = models.IntegerField(default=0)
+
+
+class EmbedField(models.Model):
+    embed = models.ForeignKey(Embed, related_name="fields", on_delete=models.CASCADE)
+    name = models.TextField(blank=True)
+    value = models.TextField(blank=True)
+    inline = models.BooleanField(default=False)
+
+
+class Sticker(models.Model):
+    id = models.BigIntegerField(primary_key=True)
+    name = models.CharField(max_length=255)
+    url = models.TextField()
+
+    def __str__(self):
+        return f"Sticker {self.name}"

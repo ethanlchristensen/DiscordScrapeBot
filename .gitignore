@@ -163,3 +163,4 @@ db.sqlite
 output.txt
 exports
 analyze.ipynb
+debug.ps1

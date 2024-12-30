@@ -12,8 +12,11 @@ COPY . .
 
 RUN pip install --no-cache-dir poetry
 RUN poetry config virtualenvs.create false
+
+ENV POETRY_VIRTUALENVS_CREATE=false
+ENV POETRY_VIRTUALENVS_IN_PROJECT=false
+
 RUN poetry install --no-root --no-interaction --no-ansi
-RUN poetry show
 
 EXPOSE 8000
 

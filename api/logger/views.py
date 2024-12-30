@@ -1,26 +1,16 @@
-from .models import *
-from .serializers import *
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
+from .models import Message
+from .serializers import MessageSerializer
 
-class DiscordMessageViewSet(viewsets.ModelViewSet):
-    queryset = DiscordMessage.objects.all()
-    serializer_class = DiscordMessageSerializer
-    lookup_field = 'message_id'
+class MessageViewSet(viewsets.ModelViewSet):
+    queryset = Message.objects.all()
+    serializer_class = MessageSerializer
+    # permission_classes = [IsAuthenticated]
 
-    @action(detail=True, methods=['post'])
-    def edit(self, request, message_id=None):
-        message = self.get_object()
-        
-        # Create edit history
-        MessageEdit.objects.create(
-            message=message,
-            previous_content=message.content
-        )
-        
-        # Update message content
-        message.content = request.data.get('content', message.content)
-        message.save()
-        
-        return Response(self.get_serializer(message).data)
+    def get_queryset(self):
+        queryset = Message.objects.all()
+        channel_id = self.request.query_params.get('channel_id', None)
+        if channel_id is not None:
+            queryset = queryset.filter(channel_id=channel_id)
+        return queryset
