@@ -1,18 +1,116 @@
-<!-- messages_list.html -->
-{% load render_table from django_tables2 %}
+{% load static %}
+{% load django_tables2 %}
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Messages</title>
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .details-row {
+            background-color: #f8f9fa;
+            padding: 15px;
+        }
+
+        .details-content {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .clickable {
+            cursor: pointer;
+        }
+
+        .detail-section {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            background-color: white;
+        }
+
+        a[onclick] {
+            color: #007bff;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        a[onclick]:hover {
+            color: #0056b3;
+            text-decoration: underline;
+        }
+    </style>
 </head>
+
 <body>
     <div class="container mt-5">
         <h2>Messages</h2>
-        <div class="table">
+        <div class="table-responsive">
             {% render_table table %}
         </div>
     </div>
+
+    <script>
+        window.toggleDetails = function(id) {
+            console.log('Toggle called for ID:', id);
+            const detailsRow = document.getElementById(`details-${id}`);
+            console.log('Found details row:', detailsRow);
+            
+            if (detailsRow) {
+                const currentDisplay = detailsRow.style.display;
+                console.log('Current display:', currentDisplay);
+                detailsRow.style.display = currentDisplay === 'none' ? 'table-row' : 'none';
+                console.log('New display:', detailsRow.style.display);
+            }
+        }
+        document.addEventListener('DOMContentLoaded', function () {
+            const rows = document.querySelectorAll('tr[data-record-id]');
+            rows.forEach(row => {
+                const id = row.getAttribute('data-record-id');
+                const detailsRow = document.createElement('tr');
+                detailsRow.id = `details-${id}`;
+                detailsRow.style.display = 'none';
+                detailsRow.classList.add('details-row');
+
+                let detailsHTML = '<td colspan="9"><div class="details-content">';
+
+                // Attachments section
+                const attachments = row.getAttribute('data-attachments');
+                if (attachments && attachments !== "No attachments") {
+                    detailsHTML += `
+                        <div class="detail-section">
+                            <h5>Attachments</h5>
+                            ${attachments.split(', ').map(att => `<div>${att}</div>`).join('')}
+                        </div>`;
+                }
+
+                // Embeds section
+                const embeds = row.getAttribute('data-embeds');
+                if (embeds && embeds !== "No embeds") {
+                    detailsHTML += `
+                        <div class="detail-section">
+                            <h5>Embeds</h5>
+                            ${embeds.split(' || ').map(embed => `<div>${embed}</div>`).join('')}
+                        </div>`;
+                }
+
+                // Content History section
+                const contentHistory = row.getAttribute('data-content-history');
+                if (contentHistory && contentHistory !== "No edits") {
+                    detailsHTML += `
+                        <div class="detail-section">
+                            <h5>Content History</h5>
+                            ${contentHistory.split(' || ').map(edit => `<div>${edit}</div>`).join('')}
+                        </div>`;
+                }
+
+                detailsHTML += '</div></td>';
+                detailsRow.innerHTML = detailsHTML;
+                row.after(detailsRow);
+            });
+        });
+    </script>
 </body>
+
 </html>

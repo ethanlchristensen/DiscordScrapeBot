@@ -35,7 +35,7 @@ class Embed(models.Model):
         Message, related_name="embeds", on_delete=models.CASCADE
     )
     type = models.CharField(max_length=50)
-    title = models.TextField(blank=True)
+    title = models.TextField(blank=True, null=True)
     color = models.IntegerField(null=True)
 
     def __str__(self):

@@ -24,6 +24,7 @@ def save_last_boot_time():
     with open("previous_boot.json", "r") as file:
         previous_boot = json.loads(file.read())
     previous_boot["last_boot_time"] = str(datetime.datetime.now(datetime.UTC))
+    #previous_boot["last_boot_time"] = "2024-12-29 23:43:41.752261+00:00"
     with open("previous_boot.json", "w") as file:
         file.write(json.dumps(previous_boot, indent=4))
 
@@ -43,6 +44,10 @@ class DiscordScrapeBot(discord.Client):
         for idx in range(len(embeds)):
             if "color" not in embeds[idx]:
                 embeds[idx]["color"] = None
+            if "title" not in embeds[idx]:
+                embeds[idx]["title"] = None
+            if "type" not in embeds[idx]:
+                embeds[idx]["type"] = None
 
         message_data = {
             "id": message.id,
