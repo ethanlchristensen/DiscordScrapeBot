@@ -1,5 +1,4 @@
 services:
-  restart: always
   api:
     build:
       context: ./api
@@ -15,7 +14,7 @@ services:
       - DJANGO_SUPERUSER_USERNAME=ethan
       - DJANGO_SUPERUSER_PASSWORD=ethan
       - DJANGO_SUPERUSER_EMAIL=ethanlchristensen@outlook.com
-  
+    restart: always
   discord-bot:
     build:
       context: ./bot
@@ -27,3 +26,4 @@ services:
       - ./bot:/bot
     depends_on:
       - api
+    restart: always
