@@ -22,8 +22,6 @@ services:
     container_name: discord-bot
     env_file:
       - bot/.env
-    volumes:
-      - ./bot:/bot
     depends_on:
       - api
     restart: always
