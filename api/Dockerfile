@@ -6,7 +6,7 @@ ARG DJANGO_SUPERUSER_USERNAME
 ARG DJANGO_SUPERUSER_PASSWORD
 ARG DJANGO_SUPERUSER_EMAIL
 
-WORKDIR /api
+WORKDIR /app
 
 COPY . .
 
@@ -23,16 +23,16 @@ EXPOSE 8000
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-RUN mkdir -p /api/data && \
-    chown -R discordscrapebot:discordscrapebot /api && \
-    chmod 775 /api/data
+RUN mkdir -p /app/data && \
+    chown -R discordscrapebot:discordscrapebot /app && \
+    chmod 775 /app/data
 
 RUN python manage.py collectstatic --noinput
 RUN python manage.py migrate
-RUN python manage.py createsuperuser --noinput
+RUN python manage.py createsuperuser --noinput || true
 
-RUN chown -R discordscrapebot:discordscrapebot /api && \
-    chmod 775 /api && \
+RUN chown -R discordscrapebot:discordscrapebot /app && \
+    chmod 775 /app && \
     chmod 664 db.sqlite3
 
 USER discordscrapebot

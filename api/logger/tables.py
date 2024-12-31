@@ -44,7 +44,10 @@ class MessageTable(tables.Table):
             field_count = embed.fields.count()
             if field_count > 0:
                 details.append(f"Fields: {field_count}")
-                
+            
+            if embed.description:
+                details.append(f"Description: {embed.description}")
+
             embed_details.append(" | ".join(details))
         
         return format_html(
@@ -88,11 +91,12 @@ class MessageTable(tables.Table):
         row_attrs = {
             'data-record-id': lambda record: str(record.id),
             'data-attachments': lambda record: ", ".join(f"{att.filename} ({att.size} bytes)" for att in record.attachments.all()),
-            'data-embeds': lambda record: " || ".join(
-                " | ".join([
-                    f"Title: {embed.title or 'No title'}",
-                    f"Footer: {embed.footer.text}" if hasattr(embed, 'footer') and embed.footer else "",
-                    f"Fields: {embed.fields.count()}" if embed.fields.exists() else ""
+            'data-embeds': lambda record: "<br/><br/>".join(
+                "<br/>".join([
+                    f"<h5>Title:</h5>{embed.title or 'No title'}<br/>",
+                    f"<h5>Description:</h5>{embed.description or 'No description'}<br/>",
+                    f"<h5>Footer:</h5>{embed.footer.text}<br/>" if hasattr(embed, 'footer') and embed.footer else "",
+                    f"<h5>Fields:</h5>{embed.fields.count()}<br/>" if embed.fields.exists() else ""
                 ]).strip(" |") 
                 for embed in record.embeds.all()
             ),

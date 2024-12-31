@@ -41,7 +41,7 @@ class EmbedSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Embed
-        fields = ["type", "title", "color", "footer", "thumbnail", "fields"]
+        fields = ["type", "title", "color", "description", "footer", "thumbnail", "fields"]
 
     def create(self, validated_data):
         footer_data = validated_data.pop("footer", None)
@@ -180,11 +180,11 @@ class MessageSerializer(serializers.ModelSerializer):
         
         # Extract current embeds' relevant fields
         current_embeds = list(
-            instance.embeds.values('type', 'title', 'color')
+            instance.embeds.values('type', 'title', 'color', 'description')
         )
 
         new_embeds = [
-            {key:embed[key] for key in ["type", "title", "color"]}
+            {key:embed[key] for key in ["type", "title", "color", 'description']}
             for embed in new_embeds_data
         ]
 
