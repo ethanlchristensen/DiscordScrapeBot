@@ -12,6 +12,8 @@ import logging
 from dotenv import load_dotenv
 from discord import Message, app_commands
 
+load_dotenv()
+
 logger = logging.getLogger("discord")
 
 
@@ -80,6 +82,16 @@ class DiscordScrapeBot(discord.Client):
         }
         return message_data
 
+    # async def prefll_cache(self):
+    #     logger.info("Prefilling bot cache with 100 messages from each channel.")
+    #     target_guild = self.get_guild(int(os.getenv("GUILD_ID")))
+    #     for channel in target_guild.text_channels:
+    #         try:
+    #             async for _ in channel.history(limit=100):
+    #                 pass
+    #         except Exception as e:
+    #             print(f"Failed to fetch messages from {channel.name}: {e}")
+
     async def grab_messages_after(self, after):
         guild = self.get_guild(int(os.getenv("GUILD_ID")))
         success_messages = 0
@@ -127,7 +139,9 @@ class DiscordScrapeBot(discord.Client):
                 previous_boot_data["last_boot_time"], date_format
             )
         logger.info(f"Grabbing and logging messages since last boot. Last boot: {previous_boot_time}")
-        await self.grab_messages_after(previous_boot_time)
+        asyncio.create_task(self.grab_messages_after(previous_boot_time))
+        # asyncio.create_task(self.prefll_cache())
+
 
     async def on_message(self, message: Message):
         """
@@ -180,6 +194,7 @@ class DiscordScrapeBot(discord.Client):
             logger.info(
                 f"Logged message edit by {before.author} to database with status code of {response.status_code}"
             )
+   
     async def on_message_delete(self, message: Message):
         """
         When a message is deleted, update its status in the database.
@@ -206,8 +221,6 @@ class DiscordScrapeBot(discord.Client):
 
 
 if __name__ == "__main__":
-    load_dotenv(override=True)
-
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 

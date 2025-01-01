@@ -12,7 +12,6 @@ services:
       - "8000:8000"
     volumes:
       - ./api/db.sqlite3:/app/db.sqlite3
-      - ./api/bot/previous_boot.json:/app/bot/previous_boot.json
     env_file:
       - ./api/.env
     user: "8877:8877"
@@ -22,6 +21,8 @@ services:
       context: ./bot
       dockerfile: Dockerfile
     container_name: discord-bot
+    volumes:
+     - ./bot/previous_boot.json:/bot/previous_boot.json
     env_file:
       - bot/.env
     depends_on:
