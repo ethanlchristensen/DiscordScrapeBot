@@ -8,6 +8,21 @@ class MessageTable(tables.Table):
     attachments = tables.Column(empty_values=(), verbose_name='Attachments')
     embeds = tables.Column(empty_values=(), verbose_name='Embeds')
     content_history = tables.Column(empty_values=(), verbose_name='Content History')
+    is_deleted = tables.Column(verbose_name='Deleted')
+
+    def render_content(self, value, record):
+        limit = 100
+        if len(value) > limit:
+            preview = value[:limit] + "..."
+            return format_html(
+                '<a href="javascript:void(0)" onclick="toggleContentDetails(\'{}\'); return false;">{}</a>',
+                str(record.id),
+                preview
+            )
+        return value
+
+    def render_is_deleted(self, value):
+        return "Yes" if value else "No"
 
     def render_created_at(self, value):
         if value:
@@ -41,12 +56,17 @@ class MessageTable(tables.Table):
             if hasattr(embed, 'footer') and embed.footer is not None:
                 details.append(f"Footer: {embed.footer.text}")
             
-            field_count = embed.fields.count()
-            if field_count > 0:
-                details.append(f"Fields: {field_count}")
-            
             if embed.description:
                 details.append(f"Description: {embed.description}")
+
+            # Add field details
+            fields_details = []
+            for field in embed.fields.all():
+                fields_details.append(f"Field Name: {field.name}, Value: {field.value}")
+            fields_summary = "<br/>".join(fields_details)
+            
+            if fields_details:
+                details.append(f"Fields: {fields_summary}")
 
             embed_details.append(" | ".join(details))
         
@@ -83,6 +103,7 @@ class MessageTable(tables.Table):
             "attachments",
             "embeds", 
             "content_history",
+            "is_deleted",
         )
         attrs = {
             'class': 'table table-striped table-bordered',
@@ -103,5 +124,6 @@ class MessageTable(tables.Table):
             'data-content-history': lambda record: " || ".join(
                 f"{edit.edited_at.strftime('%Y-%m-%d %H:%M')}: {edit.content}" 
                 for edit in record.content_history.all()
-            )
+            ),
+            'data-content-full': lambda record: record.content
         }

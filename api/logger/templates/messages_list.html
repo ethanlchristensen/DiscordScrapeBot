@@ -53,62 +53,80 @@
     </div>
 
     <script>
-        window.toggleDetails = function(id) {
+        window.toggleDetails = function (id) {
             console.log('Toggle called for ID:', id);
             const detailsRow = document.getElementById(`details-${id}`);
             console.log('Found details row:', detailsRow);
-            
+
             if (detailsRow) {
                 const currentDisplay = detailsRow.style.display;
                 console.log('Current display:', currentDisplay);
                 detailsRow.style.display = currentDisplay === 'none' ? 'table-row' : 'none';
                 console.log('New display:', detailsRow.style.display);
             }
-        }
+        };
+
+        window.toggleContentDetails = function (id) {
+            const contentRow = document.getElementById(`content-details-${id}`);
+            if (contentRow) {
+                const currentDisplay = contentRow.style.display;
+                contentRow.style.display = currentDisplay === 'none' ? 'table-row' : 'none';
+            }
+        };
+
         document.addEventListener('DOMContentLoaded', function () {
             const rows = document.querySelectorAll('tr[data-record-id]');
             rows.forEach(row => {
                 const id = row.getAttribute('data-record-id');
+
+                // Details row for attachments, embeds, and content history
                 const detailsRow = document.createElement('tr');
-                detailsRow.id = `details-${id}`;
+                detailsRow.id = `details-${id}`; // Ensure this ID matches logic in toggle function
                 detailsRow.style.display = 'none';
                 detailsRow.classList.add('details-row');
 
                 let detailsHTML = '<td colspan="9"><div class="details-content">';
 
-                // Attachments section
                 const attachments = row.getAttribute('data-attachments');
                 if (attachments && attachments !== "No attachments") {
                     detailsHTML += `
-                        <div class="detail-section">
-                            <h5>Attachments</h5>
-                            ${attachments.split(', ').map(att => `<div>${att}</div>`).join('')}
-                        </div>`;
+                <div class="detail-section">
+                    <h5>Attachments</h5>
+                    ${attachments.split(', ').map(att => `<div>${att}</div>`).join('')}
+                </div>`;
                 }
 
-                // Embeds section
                 const embeds = row.getAttribute('data-embeds');
                 if (embeds && embeds !== "No embeds") {
                     detailsHTML += `
-                        <div class="detail-section">
-                            <h5>Embeds</h5>
-                            ${embeds.split(' || ').map(embed => `<div>${embed}</div>`).join('')}
-                        </div>`;
+                <div class="detail-section">
+                    <h5>Embeds</h5>
+                    ${embeds.replaceAll(' || ', '<br/><br/>').replaceAll(' | ', '<br/>')}
+                </div>`;
                 }
 
-                // Content History section
                 const contentHistory = row.getAttribute('data-content-history');
                 if (contentHistory && contentHistory !== "No edits") {
                     detailsHTML += `
-                        <div class="detail-section">
-                            <h5>Content History</h5>
-                            ${contentHistory.split(' || ').map(edit => `<div>${edit}</div>`).join('')}
-                        </div>`;
+                <div class="detail-section">
+                    <h5>Content History</h5>
+                    ${contentHistory.split(' || ').map(edit => `<div>${edit}</div>`).join('')}
+                </div>`;
                 }
 
                 detailsHTML += '</div></td>';
                 detailsRow.innerHTML = detailsHTML;
                 row.after(detailsRow);
+
+                // Full content row for expanding message content
+                const contentRow = document.createElement('tr');
+                contentRow.id = `content-details-${id}`;
+                contentRow.style.display = 'none';
+                contentRow.classList.add('details-row');
+
+                const fullContent = row.getAttribute('data-content-full');
+                contentRow.innerHTML = `<td colspan="9"><div class="details-content">${fullContent}</div></td>`;
+                row.after(contentRow);
             });
         });
     </script>

@@ -2,9 +2,15 @@ FROM python:3.11-slim
 
 RUN useradd -u 8877 discordscrapebot
 
+# These ARGs are still needed to receive the build arguments
 ARG DJANGO_SUPERUSER_USERNAME
 ARG DJANGO_SUPERUSER_PASSWORD
 ARG DJANGO_SUPERUSER_EMAIL
+
+# These ENVs are still needed to make the args available at runtime
+ENV DJANGO_SUPERUSER_USERNAME=$DJANGO_SUPERUSER_USERNAME
+ENV DJANGO_SUPERUSER_PASSWORD=$DJANGO_SUPERUSER_PASSWORD
+ENV DJANGO_SUPERUSER_EMAIL=$DJANGO_SUPERUSER_EMAIL
 
 WORKDIR /app
 
@@ -28,13 +34,9 @@ RUN mkdir -p /app/data && \
     chmod 775 /app/data
 
 RUN python manage.py collectstatic --noinput
-RUN python manage.py migrate
-RUN python manage.py createsuperuser --noinput || true
-
-RUN chown -R discordscrapebot:discordscrapebot /app && \
-    chmod 775 /app && \
-    chmod 664 db.sqlite3
 
 USER discordscrapebot
 
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+CMD python manage.py migrate && \
+    python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('$DJANGO_SUPERUSER_USERNAME', '$DJANGO_SUPERUSER_EMAIL', '$DJANGO_SUPERUSER_PASSWORD') if not User.objects.filter(username='$DJANGO_SUPERUSER_USERNAME').exists() else None;" && \
+    python manage.py runserver 0.0.0.0:8000

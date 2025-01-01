@@ -48,6 +48,8 @@ class DiscordScrapeBot(discord.Client):
                 embeds[idx]["title"] = None
             if "type" not in embeds[idx]:
                 embeds[idx]["type"] = None
+            if "description" not in embeds[idx]:
+                embeds[idx]["description"] = None
 
         message_data = {
             "id": message.id,
@@ -178,6 +180,29 @@ class DiscordScrapeBot(discord.Client):
             logger.info(
                 f"Logged message edit by {before.author} to database with status code of {response.status_code}"
             )
+    async def on_message_delete(self, message: Message):
+        """
+        When a message is deleted, update its status in the database.
+        """
+        if message.guild.id != int(os.getenv("GUILD_ID")):
+            return
+        
+        logger.info(f"Message deleted from {message.author} in channel {message.channel}")
+
+        patch_data = {
+            "is_deleted": True
+        }
+
+        response = requests.patch(
+            f"{self.logger_url}{message.id}/",
+            data=json.dumps(patch_data),
+            headers={"Content-Type": "application/json"},
+        )
+        
+        if response.status_code not in [200, 204]:
+            logger.error(f"Error updating message status to deleted: {response.text}")
+        else:
+            logger.info(f"Successfully updated message {message.id} status to deleted")
 
 
 if __name__ == "__main__":

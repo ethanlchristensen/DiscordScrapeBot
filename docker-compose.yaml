@@ -4,18 +4,18 @@ services:
       context: ./api
       dockerfile: Dockerfile
       args:
-        - DJANGO_SUPERUSER_USERNAME=ethan
-        - DJANGO_SUPERUSER_PASSWORD=ethan
-        - DJANGO_SUPERUSER_EMAIL=ethanlchristensen@outlook.com
+        - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME}
+        - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
+        - DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL}
     container_name: discord-scrape-bot-api
     ports:
       - "8000:8000"
-    environment:
-      - DJANGO_SUPERUSER_USERNAME=ethan
-      - DJANGO_SUPERUSER_PASSWORD=ethan
-      - DJANGO_SUPERUSER_EMAIL=ethanlchristensen@outlook.com
     volumes:
       - ./api/db.sqlite3:/app/db.sqlite3
+      - ./api/bot/previous_boot.json:/app/bot/previous_boot.json
+    env_file:
+      - ./api/.env
+    user: "8877:8877"
     restart: always
   discord-bot:
     build:

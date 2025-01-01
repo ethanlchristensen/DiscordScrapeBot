@@ -112,6 +112,8 @@ class MessageSerializer(serializers.ModelSerializer):
             "author_discriminator",
             "created_at",
             "edited_at",
+            "is_deleted",
+            "deleted_at",
             "attachments",
             "embeds",
             "stickers",
@@ -204,6 +206,13 @@ class MessageSerializer(serializers.ModelSerializer):
             embed_serializer = EmbedSerializer(data=embed_data)
             if embed_serializer.is_valid(raise_exception=True):
                 embed_serializer.save(message=instance)
+
+        is_deleted = validated_data.get("is_deleted", instance.is_deleted)
+        if is_deleted and not instance.is_deleted:
+            instance.deleted_at = timezone.now()
+        elif not is_deleted:
+            instance.deleted_at = None
+        instance.is_deleted = is_deleted
 
         # Update other fields
         instance.content = validated_data.get("content", instance.content)

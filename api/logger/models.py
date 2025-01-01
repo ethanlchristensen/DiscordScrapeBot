@@ -12,6 +12,8 @@ class Message(models.Model):
     created_at = models.DateTimeField()
     edited_at = models.DateTimeField(null=True, blank=True)
     stickers = models.ManyToManyField("Sticker", related_name="messages", blank=True)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True, default=None)
 
     def __str__(self):
         return f"Message {self.id} - {self.author_name}"
