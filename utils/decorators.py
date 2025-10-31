@@ -32,7 +32,7 @@ def admin_only(func: Callable):
         if interaction.user.id != config.adminId:
             logger.warning(
                 f"Unauthorized access attempt by {interaction.user.name} "
-                f"({interaction.user.id}) to command '{func.__name__}'"
+                f"({interaction.user.id}) to command '{func.__name__}'. Admin ID is {config.adminId}."
             )
             await interaction.response.send_message(
                 "❌ You are not authorized to use this command. Only the bot admin can use this.",
