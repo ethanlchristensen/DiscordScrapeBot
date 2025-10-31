@@ -17,6 +17,6 @@ COPY pyproject.toml poetry.lock ./
 RUN poetry install --no-root --only main
 
 # Copy application code
-COPY bot.py .
+COPY . .
 
 CMD ["python", "bot.py"]
