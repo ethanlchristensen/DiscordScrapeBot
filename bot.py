@@ -613,7 +613,7 @@ async def backfill_messages(
 ):
     """Manually backfill messages for a date range"""
     # Send initial deferred response immediately to avoid token expiration
-    await interaction.response.defer(ephemeral=False)
+    await interaction.response.defer(ephemeral=True)
     
     try:
         # Parse dates - enforce YYYY-MM-DD format
@@ -626,7 +626,7 @@ async def backfill_messages(
         
         # Validate date range
         if from_datetime >= to_datetime:
-            await interaction.followup.send("❌ From date must be before to date!", ephemeral=False)
+            await interaction.followup.send("❌ From date must be before to date!", ephemeral=True)
             return
         
         # Determine guild
@@ -634,15 +634,15 @@ async def backfill_messages(
             try:
                 guild = interaction.client.get_guild(int(guild_id))
                 if not guild:
-                    await interaction.followup.send(f"❌ Guild with ID {guild_id} not found!", ephemeral=False)
+                    await interaction.followup.send(f"❌ Guild with ID {guild_id} not found!", ephemeral=True)
                     return
             except ValueError:
-                await interaction.followup.send(f"❌ Invalid guild ID format!", ephemeral=False)
+                await interaction.followup.send(f"❌ Invalid guild ID format!", ephemeral=True)
                 return
         else:
             guild = interaction.guild
             if not guild:
-                await interaction.followup.send("❌ This command must be used in a server or provide a guild_id!", ephemeral=False)
+                await interaction.followup.send("❌ This command must be used in a server or provide a guild_id!", ephemeral=True)
                 return
         
         # Parse channel IDs if provided
@@ -657,17 +657,17 @@ async def backfill_messages(
                     else:
                         await interaction.followup.send(
                             f"⚠️ Warning: Channel ID {cid} not found or is not a text channel. Skipping.",
-                            ephemeral=False
+                            ephemeral=True
                         )
                         logger.warning(f"Channel {cid} not found in guild {guild.name}")
                 
                 if not target_channels:
-                    await interaction.followup.send("❌ No valid channels found!", ephemeral=False)
+                    await interaction.followup.send("❌ No valid channels found!", ephemeral=True)
                     return
             except ValueError as e:
                 await interaction.followup.send(
                     f"❌ Invalid channel ID format! Use comma-separated numbers (e.g., 123456789,987654321)",
-                    ephemeral=False
+                    ephemeral=True
                 )
                 return
         else:
@@ -686,7 +686,7 @@ async def backfill_messages(
             f"📺 Channels: {channel_list}\n"
             f"⏳ This may take a while...\n\n"
             f"**Status updates will be logged to the console.**",
-            ephemeral=False
+            ephemeral=True
         )
         
         logger.info(
@@ -738,7 +738,7 @@ async def backfill_messages(
                         f"📊 Progress Update:\n"
                         f"✅ Channels: {channels_processed}/{len(target_channels)}\n"
                         f"📝 Messages: {success_messages:,} succeeded, {failed_messages:,} failed",
-                        ephemeral=False
+                        ephemeral=True
                     )
                     last_update_time = current_time
                 except discord.errors.HTTPException as e:
@@ -751,7 +751,7 @@ async def backfill_messages(
                 f"📺 Channels processed: **{channels_processed}**\n"
                 f"📊 Successfully logged: **{success_messages:,}** messages\n"
                 f"❌ Failed: **{failed_messages:,}** messages",
-                ephemeral=False
+                ephemeral=True
             )
         except discord.errors.HTTPException as e:
             logger.error(f"Failed to send completion message (token likely expired): {e}")
@@ -765,14 +765,14 @@ async def backfill_messages(
         try:
             await interaction.followup.send(
                 f"❌ Invalid date format! Use: YYYY-MM-DD (e.g., 2022-01-01)",
-                ephemeral=False
+                ephemeral=True
             )
         except discord.errors.HTTPException:
             logger.error(f"Failed to send error message (token expired): {e}")
     except Exception as e:
         logger.error(f"Error in backfill command: {e}", exc_info=True)
         try:
-            await interaction.followup.send(f"❌ Error during backfill: {e}", ephemeral=False)
+            await interaction.followup.send(f"❌ Error during backfill: {e}", ephemeral=True)
         except discord.errors.HTTPException:
             logger.error(f"Failed to send error message (token expired): {e}")
 
@@ -801,7 +801,7 @@ async def backfill_channels(
 ):
     """Backfill messages for specific channels"""
     # Send initial deferred response
-    await interaction.response.defer(ephemeral=False)
+    await interaction.response.defer(ephemeral=True)
     
     try:
         # Parse dates
@@ -814,7 +814,7 @@ async def backfill_channels(
         
         # Validate date range
         if from_datetime >= to_datetime:
-            await interaction.followup.send("❌ From date must be before to date!", ephemeral=False)
+            await interaction.followup.send("❌ From date must be before to date!", ephemeral=True)
             return
         
         # Collect all specified channels
@@ -831,7 +831,7 @@ async def backfill_channels(
             f"📅 To: `{to_datetime.date()}`\n"
             f"📺 Channels: {channel_list}\n"
             f"⏳ This may take a while...",
-            ephemeral=False
+            ephemeral=True
         )
         
         logger.info(
@@ -882,7 +882,7 @@ async def backfill_channels(
                     await interaction.followup.send(
                         f"📊 Progress: {channels_processed}/{len(target_channels)} channels, "
                         f"{success_messages:,} messages logged",
-                        ephemeral=False
+                        ephemeral=True
                     )
                     last_update_time = current_time
                 except discord.errors.HTTPException as e:
@@ -895,7 +895,7 @@ async def backfill_channels(
                 f"📺 Channels: **{channels_processed}**\n"
                 f"📊 Messages logged: **{success_messages:,}**\n"
                 f"❌ Failed: **{failed_messages:,}**",
-                ephemeral=False
+                ephemeral=True
             )
         except discord.errors.HTTPException as e:
             logger.error(f"Failed to send completion message: {e}")
@@ -909,14 +909,14 @@ async def backfill_channels(
         try:
             await interaction.followup.send(
                 f"❌ Invalid date format! Use: YYYY-MM-DD (e.g., 2022-01-01)",
-                ephemeral=False
+                ephemeral=True
             )
         except discord.errors.HTTPException as e:
             logger.error(f"Failed to send error message: {e}")
     except Exception as e:
         logger.error(f"Error in backfill_channels command: {e}", exc_info=True)
         try:
-            await interaction.followup.send(f"❌ Error during backfill: {e}", ephemeral=False)
+            await interaction.followup.send(f"❌ Error during backfill: {e}", ephemeral=True)
         except discord.errors.HTTPException:
             logger.error(f"Failed to send error message (token expired): {e}")
 
@@ -945,7 +945,7 @@ async def backfill_categories(
 ):
     """Backfill messages for entire channel categories"""
     # Send initial deferred response
-    await interaction.response.defer(ephemeral=False)
+    await interaction.response.defer(ephemeral=True)
     
     try:
         # Parse dates
@@ -958,7 +958,7 @@ async def backfill_categories(
         
         # Validate date range
         if from_datetime >= to_datetime:
-            await interaction.followup.send("❌ From date must be before to date!", ephemeral=False)
+            await interaction.followup.send("❌ From date must be before to date!", ephemeral=True)
             return
         
         # Collect all specified categories
@@ -976,7 +976,7 @@ async def backfill_categories(
             category_info.append(f"**{cat.name}** ({len(text_channels_in_cat)} channels)")
         
         if not target_channels:
-            await interaction.followup.send("❌ No text channels found in the specified categories!", ephemeral=False)
+            await interaction.followup.send("❌ No text channels found in the specified categories!", ephemeral=True)
             return
         
         # Send status
@@ -989,7 +989,7 @@ async def backfill_categories(
             f"📺 Total channels: **{len(target_channels)}**\n"
             f"⏳ This may take a while...\n\n"
             f"**Status updates will be logged to the console.**",
-            ephemeral=False
+            ephemeral=True
         )
         
         logger.info(
@@ -1042,7 +1042,7 @@ async def backfill_categories(
                         f"📊 Progress Update:\n"
                         f"✅ Channels: {channels_processed}/{len(target_channels)}\n"
                         f"📝 Messages: {success_messages:,} succeeded, {failed_messages:,} failed",
-                        ephemeral=False
+                        ephemeral=True
                     )
                     last_update_time = current_time
                 except discord.errors.HTTPException as e:
@@ -1056,7 +1056,7 @@ async def backfill_categories(
                 f"📺 Channels processed: **{channels_processed}**\n"
                 f"📊 Messages logged: **{success_messages:,}**\n"
                 f"❌ Failed: **{failed_messages:,}**",
-                ephemeral=False
+                ephemeral=True
             )
         except discord.errors.HTTPException as e:
             logger.error(f"Failed to send completion message: {e}")
@@ -1071,14 +1071,14 @@ async def backfill_categories(
         try:
             await interaction.followup.send(
                 f"❌ Invalid date format! Use: YYYY-MM-DD (e.g., 2022-01-01)",
-                ephemeral=False
+                ephemeral=True
             )
         except discord.errors.HTTPException as e:
             logger.error(f"Failed to send error message: {e}")
     except Exception as e:
         logger.error(f"Error in backfill_categories command: {e}", exc_info=True)
         try:
-            await interaction.followup.send(f"❌ Error during backfill: {e}", ephemeral=False)
+            await interaction.followup.send(f"❌ Error during backfill: {e}", ephemeral=True)
         except discord.errors.HTTPException:
             logger.error(f"Failed to send error message (token expired): {e}")
 
@@ -1103,7 +1103,7 @@ async def backfill_all_guilds(interaction: discord.Interaction, from_date: str, 
         
         # Validate date range
         if from_datetime >= to_datetime:
-            await interaction.response.send_message("❌ From date must be before to date!", ephemeral=False)
+            await interaction.response.send_message("❌ From date must be before to date!", ephemeral=True)
             return
         
         # Send confirmation message
@@ -1113,16 +1113,16 @@ async def backfill_all_guilds(interaction: discord.Interaction, from_date: str, 
             f"📅 To: `{to_datetime.date()}`\n\n"
             f"Click the button below to confirm within 30 seconds.",
             view=BackfillConfirmView(interaction.user, from_datetime, to_datetime),
-            ephemeral=False
+            ephemeral=True
         )
         
     except ValueError as e:
         await interaction.response.send_message(
             f"❌ Invalid date format! Use: YYYY-MM-DD (e.g., 2022-01-01)",
-            ephemeral=False
+            ephemeral=True
         )
     except Exception as e:
-        await interaction.response.send_message(f"❌ Error: {e}", ephemeral=False)
+        await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
         logger.error(f"Error in backfill_all command: {e}", exc_info=True)
 
 
@@ -1135,7 +1135,7 @@ async def sync_commands(interaction: discord.Interaction, scope: str = "guild"):
     """Sync slash commands to Discord"""
     
     try:
-        await interaction.response.defer(ephemeral=False)
+        await interaction.response.defer(ephemeral=True)
         
         if scope.lower() == "global":
             # Sync globally (takes up to 1 hour to propagate)
@@ -1143,14 +1143,14 @@ async def sync_commands(interaction: discord.Interaction, scope: str = "guild"):
             await interaction.followup.send(
                 f"✅ Synced {len(synced)} commands globally.\n"
                 f"⏳ May take up to 1 hour to appear in all servers.",
-                ephemeral=False
+                ephemeral=True
             )
             logger.info(f"Commands synced globally by {interaction.user.name}: {len(synced)} commands")
             
         elif scope.lower() == "guild":
             # Sync to current guild (instant)
             if not interaction.guild:
-                await interaction.followup.send("❌ This command must be used in a server for guild sync!", ephemeral=False)
+                await interaction.followup.send("❌ This command must be used in a server for guild sync!", ephemeral=True)
                 return
                 
             interaction.client.tree.copy_global_to(guild=interaction.guild)
@@ -1158,18 +1158,18 @@ async def sync_commands(interaction: discord.Interaction, scope: str = "guild"):
             await interaction.followup.send(
                 f"✅ Synced {len(synced)} commands to **{interaction.guild.name}**.\n"
                 f"Commands should appear immediately.",
-                ephemeral=False
+                ephemeral=True
             )
             logger.info(f"Commands synced to guild {interaction.guild.name} by {interaction.user.name}: {len(synced)} commands")
             
         else:
             await interaction.followup.send(
                 f"❌ Invalid scope! Use 'global' or 'guild'.",
-                ephemeral=False
+                ephemeral=True
             )
             
     except Exception as e:
-        await interaction.followup.send(f"❌ Error syncing commands: {e}", ephemeral=False)
+        await interaction.followup.send(f"❌ Error syncing commands: {e}", ephemeral=True)
         logger.error(f"Error in sync command: {e}", exc_info=True)
 
 
@@ -1184,7 +1184,7 @@ class BackfillConfirmView(discord.ui.View):
     @discord.ui.button(label="✅ Confirm Backfill", style=discord.ButtonStyle.danger)
     async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user != self.user:
-            await interaction.response.send_message("❌ Only the command user can confirm!", ephemeral=False)
+            await interaction.response.send_message("❌ Only the command user can confirm!", ephemeral=True)
             return
         
         # Disable the button
@@ -1192,7 +1192,7 @@ class BackfillConfirmView(discord.ui.View):
         await interaction.response.edit_message(view=self)
         
         # Start backfill
-        await interaction.followup.send("🔄 Starting backfill for all guilds...", ephemeral=False)
+        await interaction.followup.send("🔄 Starting backfill for all guilds...", ephemeral=True)
         
         total_success = 0
         total_failed = 0
@@ -1230,7 +1230,7 @@ class BackfillConfirmView(discord.ui.View):
             f"✅ Backfill complete for **all {len(interaction.client.guilds)} guilds**!\n"
             f"📊 Total messages logged: **{total_success:,}**\n"
             f"❌ Total failed: **{total_failed:,}**",
-            ephemeral=False
+            ephemeral=True
         )
     
     async def on_timeout(self):
