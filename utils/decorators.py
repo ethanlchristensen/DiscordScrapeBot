@@ -28,11 +28,31 @@ def admin_only(func: Callable):
         # Load config
         config = ConfigService().load()
         
+        # Debug logging for type checking
+        user_id = interaction.user.id
+        admin_id = config.adminId
+        
+        logger.debug(
+            f"Admin check: user_id={user_id} (type: {type(user_id).__name__}), "
+            f"admin_id={admin_id} (type: {type(admin_id).__name__})"
+        )
+        
+        # Ensure both are integers for comparison
+        try:
+            admin_id = int(admin_id)
+        except (ValueError, TypeError):
+            logger.error(f"Invalid adminId in config: {admin_id} (type: {type(admin_id).__name__})")
+            await interaction.response.send_message(
+                "❌ Configuration error: Invalid admin ID. Please contact the bot owner.",
+                ephemeral=True
+            )
+            return
+        
         # Check if user is admin
-        if interaction.user.id != config.adminId:
+        if user_id != admin_id:
             logger.warning(
                 f"Unauthorized access attempt by {interaction.user.name} "
-                f"({interaction.user.id}) to command '{func.__name__}'. Admin ID is {config.adminId}."
+                f"({user_id}) to command '{func.__name__}'. Admin ID is {admin_id}."
             )
             await interaction.response.send_message(
                 "❌ You are not authorized to use this command. Only the bot admin can use this.",
@@ -41,7 +61,7 @@ def admin_only(func: Callable):
             return
         
         # User is admin, execute the command
-        logger.info(f"Admin {interaction.user.name} ({interaction.user.id}) executing command '{func.__name__}'")
+        logger.info(f"Admin {interaction.user.name} ({user_id}) executing command '{func.__name__}'")
         return await func(interaction, *args, **kwargs)
     
     return wrapper
