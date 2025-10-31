@@ -5,7 +5,7 @@ from typing import Literal, TypeVar, get_args, get_origin
 
 import yaml
 
-logger = logging.getLogger("bot.config")
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 

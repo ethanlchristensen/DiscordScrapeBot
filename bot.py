@@ -598,11 +598,21 @@ class DiscordScrapeBot(commands.Bot):
 @app_commands.describe(
     from_date="Start date in YYYY-MM-DD format (e.g., 2022-01-01)",
     to_date="End date in YYYY-MM-DD format (optional, defaults to now)",
-    guild_id="Specific guild ID to backfill (optional, defaults to current server)"
+    guild_id="Specific guild ID to backfill (optional, defaults to current server)",
+    channel_ids="Comma-separated channel IDs to backfill (optional, defaults to all channels)"
 )
 @app_commands.default_permissions(administrator=True)
-async def backfill_messages(interaction: discord.Interaction, from_date: str, to_date: str = None, guild_id: str = None):
+async def backfill_messages(
+    interaction: discord.Interaction, 
+    from_date: str, 
+    to_date: str = None, 
+    guild_id: str = None,
+    channel_ids: str = None
+):
     """Manually backfill messages for a date range"""
+    # Send initial deferred response immediately to avoid token expiration
+    await interaction.response.defer(ephemeral=True)
+    
     try:
         # Parse dates - enforce YYYY-MM-DD format
         from_datetime = datetime.strptime(from_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
@@ -614,7 +624,7 @@ async def backfill_messages(interaction: discord.Interaction, from_date: str, to
         
         # Validate date range
         if from_datetime >= to_datetime:
-            await interaction.response.send_message("❌ From date must be before to date!", ephemeral=True)
+            await interaction.followup.send("❌ From date must be before to date!", ephemeral=True)
             return
         
         # Determine guild
@@ -622,84 +632,451 @@ async def backfill_messages(interaction: discord.Interaction, from_date: str, to
             try:
                 guild = interaction.client.get_guild(int(guild_id))
                 if not guild:
-                    await interaction.response.send_message(f"❌ Guild with ID {guild_id} not found!", ephemeral=True)
+                    await interaction.followup.send(f"❌ Guild with ID {guild_id} not found!", ephemeral=True)
                     return
             except ValueError:
-                await interaction.response.send_message(f"❌ Invalid guild ID format!", ephemeral=True)
+                await interaction.followup.send(f"❌ Invalid guild ID format!", ephemeral=True)
                 return
         else:
             guild = interaction.guild
             if not guild:
-                await interaction.response.send_message("❌ This command must be used in a server or provide a guild_id!", ephemeral=True)
+                await interaction.followup.send("❌ This command must be used in a server or provide a guild_id!", ephemeral=True)
                 return
         
-        # Send initial response
-        await interaction.response.send_message(
+        # Parse channel IDs if provided
+        target_channels = []
+        if channel_ids:
+            try:
+                parsed_ids = [int(cid.strip()) for cid in channel_ids.split(',')]
+                for cid in parsed_ids:
+                    channel = guild.get_channel(cid)
+                    if channel and isinstance(channel, discord.TextChannel):
+                        target_channels.append(channel)
+                    else:
+                        await interaction.followup.send(
+                            f"⚠️ Warning: Channel ID {cid} not found or is not a text channel. Skipping.",
+                            ephemeral=True
+                        )
+                        logger.warning(f"Channel {cid} not found in guild {guild.name}")
+                
+                if not target_channels:
+                    await interaction.followup.send("❌ No valid channels found!", ephemeral=True)
+                    return
+            except ValueError as e:
+                await interaction.followup.send(
+                    f"❌ Invalid channel ID format! Use comma-separated numbers (e.g., 123456789,987654321)",
+                    ephemeral=True
+                )
+                return
+        else:
+            # No specific channels - use all text channels
+            target_channels = guild.text_channels
+        
+        # Send status update
+        channel_list = ", ".join([f"#{c.name}" for c in target_channels[:5]])
+        if len(target_channels) > 5:
+            channel_list += f" and {len(target_channels) - 5} more"
+        
+        await interaction.followup.send(
             f"🔄 Starting backfill for **{guild.name}**\n"
             f"📅 From: `{from_datetime.date()}`\n"
             f"📅 To: `{to_datetime.date()}`\n"
-            f"⏳ This may take a while..."
+            f"📺 Channels: {channel_list}\n"
+            f"⏳ This may take a while...\n\n"
+            f"**Status updates will be logged to the console.**",
+            ephemeral=True
         )
         
         logger.info(
             f"Manual backfill started by {interaction.user.name} for guild {guild.name} "
+            f"from {from_datetime} to {to_datetime} - {len(target_channels)} channels"
+        )
+        
+        # Perform backfill with progress tracking
+        success_messages = 0
+        failed_messages = 0
+        channels_processed = 0
+        last_update_time = asyncio.get_event_loop().time()
+        
+        for channel in target_channels:
+            channel_success = 0
+            channel_failed = 0
+            
+            try:
+                logger.info(f"Starting backfill for channel #{channel.name}")
+                
+                async for message in channel.history(limit=None, after=from_datetime, before=to_datetime):
+                    try:
+                        await interaction.client.log_message(message, is_catchup=True)
+                        channel_success += 1
+                    except Exception as e:
+                        logger.error(f"Failed to log message {message.id} in #{channel.name}: {e}")
+                        channel_failed += 1
+                
+                if channel_success or channel_failed:
+                    logger.info(
+                        f"Backfill channel #{channel.name}: "
+                        f"Success: {channel_success:>6d}, Failed: {channel_failed:>6d}"
+                    )
+                    
+            except discord.errors.Forbidden:
+                logger.warning(f"Cannot access messages in #{channel.name} of {guild.name}")
+            except Exception as e:
+                logger.error(f"Error processing channel #{channel.name}: {e}", exc_info=True)
+            
+            success_messages += channel_success
+            failed_messages += channel_failed
+            channels_processed += 1
+            
+            # Send periodic updates every 5 minutes to keep interaction alive
+            current_time = asyncio.get_event_loop().time()
+            if current_time - last_update_time > 300:  # 5 minutes
+                try:
+                    await interaction.followup.send(
+                        f"📊 Progress Update:\n"
+                        f"✅ Channels: {channels_processed}/{len(target_channels)}\n"
+                        f"📝 Messages: {success_messages:,} succeeded, {failed_messages:,} failed",
+                        ephemeral=True
+                    )
+                    last_update_time = current_time
+                except discord.errors.HTTPException as e:
+                    logger.warning(f"Failed to send progress update: {e}")
+        
+        # Send completion message
+        try:
+            await interaction.followup.send(
+                f"✅ Backfill complete for **{guild.name}**!\n"
+                f"📺 Channels processed: **{channels_processed}**\n"
+                f"📊 Successfully logged: **{success_messages:,}** messages\n"
+                f"❌ Failed: **{failed_messages:,}** messages",
+                ephemeral=True
+            )
+        except discord.errors.HTTPException as e:
+            logger.error(f"Failed to send completion message (token likely expired): {e}")
+        
+        logger.info(
+            f"Manual backfill completed for guild {guild.name} - "
+            f"Channels: {channels_processed}, Success: {success_messages}, Failed: {failed_messages}"
+        )
+        
+    except ValueError as e:
+        try:
+            await interaction.followup.send(
+                f"❌ Invalid date format! Use: YYYY-MM-DD (e.g., 2022-01-01)",
+                ephemeral=True
+            )
+        except discord.errors.HTTPException:
+            logger.error(f"Failed to send error message (token expired): {e}")
+    except Exception as e:
+        logger.error(f"Error in backfill command: {e}", exc_info=True)
+        try:
+            await interaction.followup.send(f"❌ Error during backfill: {e}", ephemeral=True)
+        except discord.errors.HTTPException:
+            logger.error(f"Failed to send error message (token expired): {e}")
+
+
+@app_commands.command(name="backfill_channels", description="Backfill messages for specific channels")
+@app_commands.describe(
+    from_date="Start date in YYYY-MM-DD format (e.g., 2022-01-01)",
+    to_date="End date in YYYY-MM-DD format (optional, defaults to now)",
+    channel="First channel to backfill",
+    channel2="Second channel (optional)",
+    channel3="Third channel (optional)",
+    channel4="Fourth channel (optional)",
+    channel5="Fifth channel (optional)"
+)
+@app_commands.default_permissions(administrator=True)
+async def backfill_channels(
+    interaction: discord.Interaction,
+    from_date: str,
+    channel: discord.TextChannel,
+    to_date: str = None,
+    channel2: discord.TextChannel = None,
+    channel3: discord.TextChannel = None,
+    channel4: discord.TextChannel = None,
+    channel5: discord.TextChannel = None
+):
+    """Backfill messages for specific channels"""
+    # Send initial deferred response
+    await interaction.response.defer(ephemeral=True)
+    
+    try:
+        # Parse dates
+        from_datetime = datetime.strptime(from_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        
+        if to_date:
+            to_datetime = datetime.strptime(to_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        else:
+            to_datetime = datetime.now(timezone.utc)
+        
+        # Validate date range
+        if from_datetime >= to_datetime:
+            await interaction.followup.send("❌ From date must be before to date!", ephemeral=True)
+            return
+        
+        # Collect all specified channels
+        target_channels = [channel]
+        for ch in [channel2, channel3, channel4, channel5]:
+            if ch is not None:
+                target_channels.append(ch)
+        
+        # Send status
+        channel_list = ", ".join([f"#{c.name}" for c in target_channels])
+        await interaction.followup.send(
+            f"🔄 Starting backfill for **{interaction.guild.name}**\n"
+            f"📅 From: `{from_datetime.date()}`\n"
+            f"📅 To: `{to_datetime.date()}`\n"
+            f"📺 Channels: {channel_list}\n"
+            f"⏳ This may take a while...",
+            ephemeral=True
+        )
+        
+        logger.info(
+            f"Channel backfill started by {interaction.user.name} for {len(target_channels)} channels "
             f"from {from_datetime} to {to_datetime}"
         )
         
         # Perform backfill
         success_messages = 0
         failed_messages = 0
+        channels_processed = 0
+        last_update_time = asyncio.get_event_loop().time()
         
-        for channel in guild.text_channels:
+        for ch in target_channels:
             channel_success = 0
             channel_failed = 0
             
             try:
-                async for message in channel.history(limit=None, after=from_datetime, before=to_datetime):
+                logger.info(f"Starting backfill for channel #{ch.name}")
+                
+                async for message in ch.history(limit=None, after=from_datetime, before=to_datetime):
                     try:
                         await interaction.client.log_message(message, is_catchup=True)
                         channel_success += 1
                     except Exception as e:
-                        logger.error(f"Failed to log message {message.id}: {e}")
+                        logger.error(f"Failed to log message {message.id} in #{ch.name}: {e}")
                         channel_failed += 1
                 
                 if channel_success or channel_failed:
                     logger.info(
-                        f"Backfill channel {channel.name}: "
+                        f"Backfill channel #{ch.name}: "
                         f"Success: {channel_success:>6d}, Failed: {channel_failed:>6d}"
                     )
                     
             except discord.errors.Forbidden:
-                logger.warning(f"Cannot access messages in {channel.name} of {guild.name}")
+                logger.warning(f"Cannot access messages in #{ch.name}")
             except Exception as e:
-                logger.error(f"Error processing channel {channel.name}: {e}")
+                logger.error(f"Error processing channel #{ch.name}: {e}", exc_info=True)
             
             success_messages += channel_success
             failed_messages += channel_failed
+            channels_processed += 1
+            
+            # Send periodic updates
+            current_time = asyncio.get_event_loop().time()
+            if current_time - last_update_time > 300:  # 5 minutes
+                try:
+                    await interaction.followup.send(
+                        f"📊 Progress: {channels_processed}/{len(target_channels)} channels, "
+                        f"{success_messages:,} messages logged",
+                        ephemeral=True
+                    )
+                    last_update_time = current_time
+                except discord.errors.HTTPException as e:
+                    logger.warning(f"Failed to send progress update: {e}")
         
-        # Send completion message
+        # Send completion
+        try:
+            await interaction.followup.send(
+                f"✅ Backfill complete!\n"
+                f"📺 Channels: **{channels_processed}**\n"
+                f"📊 Messages logged: **{success_messages:,}**\n"
+                f"❌ Failed: **{failed_messages:,}**",
+                ephemeral=True
+            )
+        except discord.errors.HTTPException as e:
+            logger.error(f"Failed to send completion message: {e}")
+        
+        logger.info(
+            f"Channel backfill completed - "
+            f"Channels: {channels_processed}, Success: {success_messages}, Failed: {failed_messages}"
+        )
+        
+    except ValueError:
+        try:
+            await interaction.followup.send(
+                f"❌ Invalid date format! Use: YYYY-MM-DD (e.g., 2022-01-01)",
+                ephemeral=True
+            )
+        except discord.errors.HTTPException as e:
+            logger.error(f"Failed to send error message: {e}")
+    except Exception as e:
+        logger.error(f"Error in backfill_channels command: {e}", exc_info=True)
+        try:
+            await interaction.followup.send(f"❌ Error during backfill: {e}", ephemeral=True)
+        except discord.errors.HTTPException:
+            logger.error(f"Failed to send error message (token expired): {e}")
+
+
+@app_commands.command(name="backfill_categories", description="Backfill messages for entire channel categories/groups")
+@app_commands.describe(
+    from_date="Start date in YYYY-MM-DD format (e.g., 2022-01-01)",
+    to_date="End date in YYYY-MM-DD format (optional, defaults to now)",
+    category="First category to backfill",
+    category2="Second category (optional)",
+    category3="Third category (optional)",
+    category4="Fourth category (optional)",
+    category5="Fifth category (optional)"
+)
+@app_commands.default_permissions(administrator=True)
+async def backfill_categories(
+    interaction: discord.Interaction,
+    from_date: str,
+    category: discord.CategoryChannel,
+    to_date: str = None,
+    category2: discord.CategoryChannel = None,
+    category3: discord.CategoryChannel = None,
+    category4: discord.CategoryChannel = None,
+    category5: discord.CategoryChannel = None
+):
+    """Backfill messages for entire channel categories"""
+    # Send initial deferred response
+    await interaction.response.defer(ephemeral=True)
+    
+    try:
+        # Parse dates
+        from_datetime = datetime.strptime(from_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        
+        if to_date:
+            to_datetime = datetime.strptime(to_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        else:
+            to_datetime = datetime.now(timezone.utc)
+        
+        # Validate date range
+        if from_datetime >= to_datetime:
+            await interaction.followup.send("❌ From date must be before to date!", ephemeral=True)
+            return
+        
+        # Collect all specified categories
+        target_categories = [category]
+        for cat in [category2, category3, category4, category5]:
+            if cat is not None:
+                target_categories.append(cat)
+        
+        # Extract all text channels from the categories
+        target_channels = []
+        category_info = []
+        for cat in target_categories:
+            text_channels_in_cat = [ch for ch in cat.channels if isinstance(ch, discord.TextChannel)]
+            target_channels.extend(text_channels_in_cat)
+            category_info.append(f"**{cat.name}** ({len(text_channels_in_cat)} channels)")
+        
+        if not target_channels:
+            await interaction.followup.send("❌ No text channels found in the specified categories!", ephemeral=True)
+            return
+        
+        # Send status
+        categories_list = ", ".join(category_info)
         await interaction.followup.send(
-            f"✅ Backfill complete for **{guild.name}**!\n"
-            f"📊 Successfully logged: **{success_messages:,}** messages\n"
-            f"❌ Failed: **{failed_messages:,}** messages"
+            f"🔄 Starting backfill for **{interaction.guild.name}**\n"
+            f"📅 From: `{from_datetime.date()}`\n"
+            f"📅 To: `{to_datetime.date()}`\n"
+            f"📁 Categories: {categories_list}\n"
+            f"📺 Total channels: **{len(target_channels)}**\n"
+            f"⏳ This may take a while...\n\n"
+            f"**Status updates will be logged to the console.**",
+            ephemeral=True
         )
         
         logger.info(
-            f"Manual backfill completed for guild {guild.name} - "
+            f"Category backfill started by {interaction.user.name} for {len(target_categories)} categories "
+            f"({len(target_channels)} channels) from {from_datetime} to {to_datetime}"
+        )
+        
+        # Perform backfill with progress tracking
+        success_messages = 0
+        failed_messages = 0
+        channels_processed = 0
+        last_update_time = asyncio.get_event_loop().time()
+        
+        for ch in target_channels:
+            channel_success = 0
+            channel_failed = 0
+            
+            try:
+                category_name = ch.category.name if ch.category else "No Category"
+                logger.info(f"Starting backfill for channel #{ch.name} (in {category_name})")
+                
+                async for message in ch.history(limit=None, after=from_datetime, before=to_datetime):
+                    try:
+                        await interaction.client.log_message(message, is_catchup=True)
+                        channel_success += 1
+                    except Exception as e:
+                        logger.error(f"Failed to log message {message.id} in #{ch.name}: {e}")
+                        channel_failed += 1
+                
+                if channel_success or channel_failed:
+                    logger.info(
+                        f"Backfill channel #{ch.name} ({category_name}): "
+                        f"Success: {channel_success:>6d}, Failed: {channel_failed:>6d}"
+                    )
+                    
+            except discord.errors.Forbidden:
+                logger.warning(f"Cannot access messages in #{ch.name}")
+            except Exception as e:
+                logger.error(f"Error processing channel #{ch.name}: {e}", exc_info=True)
+            
+            success_messages += channel_success
+            failed_messages += channel_failed
+            channels_processed += 1
+            
+            # Send periodic updates every 5 minutes
+            current_time = asyncio.get_event_loop().time()
+            if current_time - last_update_time > 300:  # 5 minutes
+                try:
+                    await interaction.followup.send(
+                        f"📊 Progress Update:\n"
+                        f"✅ Channels: {channels_processed}/{len(target_channels)}\n"
+                        f"📝 Messages: {success_messages:,} succeeded, {failed_messages:,} failed",
+                        ephemeral=True
+                    )
+                    last_update_time = current_time
+                except discord.errors.HTTPException as e:
+                    logger.warning(f"Failed to send progress update: {e}")
+        
+        # Send completion
+        try:
+            await interaction.followup.send(
+                f"✅ Backfill complete for **{interaction.guild.name}**!\n"
+                f"📁 Categories processed: **{len(target_categories)}**\n"
+                f"📺 Channels processed: **{channels_processed}**\n"
+                f"📊 Messages logged: **{success_messages:,}**\n"
+                f"❌ Failed: **{failed_messages:,}**",
+                ephemeral=True
+            )
+        except discord.errors.HTTPException as e:
+            logger.error(f"Failed to send completion message: {e}")
+        
+        logger.info(
+            f"Category backfill completed - "
+            f"Categories: {len(target_categories)}, Channels: {channels_processed}, "
             f"Success: {success_messages}, Failed: {failed_messages}"
         )
         
-    except ValueError as e:
-        await interaction.response.send_message(
-            f"❌ Invalid date format! Use: YYYY-MM-DD (e.g., 2022-01-01)",
-            ephemeral=True
-        )
+    except ValueError:
+        try:
+            await interaction.followup.send(
+                f"❌ Invalid date format! Use: YYYY-MM-DD (e.g., 2022-01-01)",
+                ephemeral=True
+            )
+        except discord.errors.HTTPException as e:
+            logger.error(f"Failed to send error message: {e}")
     except Exception as e:
-        if not interaction.response.is_done():
-            await interaction.response.send_message(f"❌ Error during backfill: {e}", ephemeral=True)
-        else:
+        logger.error(f"Error in backfill_categories command: {e}", exc_info=True)
+        try:
             await interaction.followup.send(f"❌ Error during backfill: {e}", ephemeral=True)
-        logger.error(f"Error in backfill command: {e}", exc_info=True)
+        except discord.errors.HTTPException:
+            logger.error(f"Failed to send error message (token expired): {e}")
 
 
 @app_commands.command(name="backfill_all", description="Backfill messages for ALL guilds (use with caution!)")
@@ -865,11 +1242,13 @@ async def main():
     bot = DiscordScrapeBot()
 
     bot.tree.add_command(backfill_messages)
+    bot.tree.add_command(backfill_channels)
+    bot.tree.add_command(backfill_categories)
     bot.tree.add_command(backfill_all_guilds)
     bot.tree.add_command(sync_commands)
     
     try:
-        await bot.start(os.getenv("BOT_TOKEN"))
+        await bot.start(bot.config.discordToken)
     except KeyboardInterrupt:
         logger.info("Received shutdown signal")
     finally:
