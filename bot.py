@@ -12,6 +12,7 @@ from pymongo import MongoClient
 import gridfs
 
 from services import Config, ConfigService
+from utils import admin_only, bot_owner_only
 
 # Setup logging
 logging.basicConfig(
@@ -602,6 +603,7 @@ class DiscordScrapeBot(commands.Bot):
     channel_ids="Comma-separated channel IDs to backfill (optional, defaults to all channels)"
 )
 @app_commands.default_permissions(administrator=True)
+@admin_only
 async def backfill_messages(
     interaction: discord.Interaction, 
     from_date: str, 
@@ -786,6 +788,7 @@ async def backfill_messages(
     channel5="Fifth channel (optional)"
 )
 @app_commands.default_permissions(administrator=True)
+@admin_only
 async def backfill_channels(
     interaction: discord.Interaction,
     from_date: str,
@@ -828,7 +831,7 @@ async def backfill_channels(
             f"📅 To: `{to_datetime.date()}`\n"
             f"📺 Channels: {channel_list}\n"
             f"⏳ This may take a while...",
-            ephemeral=True
+            ephemeral=False
         )
         
         logger.info(
@@ -892,7 +895,7 @@ async def backfill_channels(
                 f"📺 Channels: **{channels_processed}**\n"
                 f"📊 Messages logged: **{success_messages:,}**\n"
                 f"❌ Failed: **{failed_messages:,}**",
-                ephemeral=True
+                ephemeral=False
             )
         except discord.errors.HTTPException as e:
             logger.error(f"Failed to send completion message: {e}")
@@ -929,6 +932,7 @@ async def backfill_channels(
     category5="Fifth category (optional)"
 )
 @app_commands.default_permissions(administrator=True)
+@admin_only
 async def backfill_categories(
     interaction: discord.Interaction,
     from_date: str,
@@ -985,7 +989,7 @@ async def backfill_categories(
             f"📺 Total channels: **{len(target_channels)}**\n"
             f"⏳ This may take a while...\n\n"
             f"**Status updates will be logged to the console.**",
-            ephemeral=True
+            ephemeral=False
         )
         
         logger.info(
@@ -1085,6 +1089,7 @@ async def backfill_categories(
     to_date="End date in YYYY-MM-DD format (optional, defaults to now)"
 )
 @app_commands.default_permissions(administrator=True)
+@admin_only
 async def backfill_all_guilds(interaction: discord.Interaction, from_date: str, to_date: str = None):
     """Backfill messages for ALL guilds the bot is in"""
     try:
@@ -1125,13 +1130,9 @@ async def backfill_all_guilds(interaction: discord.Interaction, from_date: str, 
 @app_commands.describe(
     scope="Sync scope: 'global' for all servers, 'guild' for current server only"
 )
+@bot_owner_only
 async def sync_commands(interaction: discord.Interaction, scope: str = "guild"):
     """Sync slash commands to Discord"""
-    # Check if user is bot owner
-    app_info = await interaction.client.application_info()
-    if interaction.user.id != app_info.owner.id:
-        await interaction.response.send_message("❌ Only the bot owner can use this command!", ephemeral=True)
-        return
     
     try:
         await interaction.response.defer(ephemeral=True)
