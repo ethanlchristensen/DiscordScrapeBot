@@ -13,7 +13,7 @@ T = TypeVar("T")
 class Config:
     discordToken: str = ""
     mongoUri: str = ""
-    adminId: int = ""
+    adminId: int = 0
 
 
 class ConfigService:
