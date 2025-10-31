@@ -3,6 +3,3 @@ services:
     build: .
     container_name: discord-scrape-bot
     restart: unless-stopped
-    environment:
-      BOT_TOKEN: ${BOT_TOKEN}
-      MONGO_URI: ${MONGO_URI}
