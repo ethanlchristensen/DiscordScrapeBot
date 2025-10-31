@@ -69,6 +69,7 @@ class DiscordScrapeBot(commands.Bot):
         self.messages_collection.create_index("author_id")
         self.messages_collection.create_index("timestamp")
         self.messages_collection.create_index("deleted")
+        self.messages_collection.create_index("guild_id")
         self.guild_status_collection.create_index("guild_id", unique=True)
         
     async def on_ready(self):
