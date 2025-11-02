@@ -89,12 +89,12 @@ class DiscordScrapeBot(commands.Bot):
                 ),
             )
 
-            if guild_status and guild_status.get("last_shutdown"):
-                last_shutdown = guild_status["last_shutdown"]
-                logger.info(f"Guild {guild.name}: Last shutdown at {last_shutdown}")
+            if guild_status and guild_status.get("last_boot"):
+                last_boot = guild_status["last_boot"]
+                logger.info(f"Guild {guild.name}: Last boot at {last_boot}")
 
                 # Catch up on missed messages for this guild
-                await self.catch_up_guild_messages(guild, after=last_shutdown)
+                await self.catch_up_guild_messages(guild, after=last_boot)
             else:
                 logger.info(
                     f"Guild {guild.name}: New guild detected - "
