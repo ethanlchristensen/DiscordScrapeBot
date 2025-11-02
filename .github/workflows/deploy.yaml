@@ -1,0 +1,55 @@
+name: Lint and Deploy
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+      
+      - name: Install dependencies
+        run: |
+          pip install ruff
+      
+      - name: Run Ruff linter
+        run: ruff check .
+      
+      - name: Run Ruff formatter
+        run: ruff format --check .
+
+  deploy-prod:
+    needs: lint
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: [self-hosted, linux, arm64, PIRONMAN]
+    environment: production
+    
+    steps:
+      - name: Verify Current Directory
+        run: |
+          echo "Ensuring we are in the correct directory:"
+          pwd
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Checkout Secrets Prod
+        run: cp -r /home/ethan/source/repos/DiscordScrapeBot/config.yaml ./config.yaml
+
+      - name: Deploy Prod with Docker Compose
+        run: |
+          echo "Stopping existing prod services (if any)..."
+          docker compose down discord-scrape-bot --remove-orphans || true
+          echo "Building and starting prod services..."
+          docker compose up -d --build discord-scrape-bot
+          echo "Cleaning up old Docker images..."
+          docker image prune -af

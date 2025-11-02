@@ -1,22 +1,35 @@
-FROM python:3.13-slim
+FROM python:3.13-slim AS builder
+
+RUN pip install poetry==2.2.0
+
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_IN_PROJECT=1 \
+    POETRY_VIRTUALENVS_CREATE=1 \
+    POETRY_CACHE_DIR=/tmp/poetry_cache
 
 WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV POETRY_VIRTUALENVS_CREATE=false
-ENV POETRY_NO_INTERACTION=1
+COPY pyproject.toml poetry.lock* ./
+RUN touch README.md
+RUN poetry install --only=main --no-root && rm -rf $POETRY_CACHE_DIR
 
-# Install Poetry
-RUN pip install --no-cache-dir -U pip poetry
 
-# Copy dependency files first (better layer caching)
-COPY pyproject.toml poetry.lock ./
+# --- Runtime stage ---
+FROM python:3.13-slim AS runtime
 
-# Install dependencies
-RUN poetry install --no-root --only main
+# Add Debian testing repo for newer ffmpeg
+RUN echo "deb http://deb.debian.org/debian testing main" > /etc/apt/sources.list.d/testing.list \
+    && apt-get update \
+    && apt-get install -y -t testing ffmpeg \
+    && apt-get install -y curl xz-utils libopus0 ca-certificates libnss3 libssl3 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy application code
+ENV VIRTUAL_ENV=/app/.venv \
+    PATH="/app/.venv/bin:$PATH"
+
+WORKDIR /app
+
+COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 COPY . .
 
 CMD ["python", "bot.py"]
