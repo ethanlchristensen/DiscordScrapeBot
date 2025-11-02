@@ -1,13 +1,14 @@
 import logging
 import os
-from dataclasses import dataclass, field, fields
-from typing import Literal, TypeVar, get_args, get_origin
+from dataclasses import dataclass, fields
+from typing import TypeVar, get_args, get_origin
 
 import yaml
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
 
 @dataclass
 class Config:
@@ -24,7 +25,9 @@ class ConfigService:
     def load(self) -> Config:
         """Load and validate configuration from YAML file."""
         if not os.path.exists(self.config_path):
-            raise FileNotFoundError(f"Configuration file not found: {self.config_path}. Please copy config.sample.yaml to config.yaml and configure it.")
+            raise FileNotFoundError(
+                f"Configuration file not found: {self.config_path}. Please copy config.sample.yaml to config.yaml and configure it."
+            )
 
         with open(self.config_path) as file:
             raw_config = yaml.safe_load(file)
@@ -53,13 +56,19 @@ class ConfigService:
             origin = get_origin(field_type)
 
             # Handle Optional types (Union with None)
-            if origin is type(None) or (origin is type(field_type) and type(None) in get_args(field_type)):
+            if origin is type(None) or (
+                origin is type(field_type) and type(None) in get_args(field_type)
+            ):
                 args = get_args(field_type)
                 if args:
                     # Get the non-None type
-                    inner_type = next((arg for arg in args if arg is not type(None)), None)
+                    inner_type = next(
+                        (arg for arg in args if arg is not type(None)), None
+                    )
                     if inner_type and hasattr(inner_type, "__dataclass_fields__"):
-                        kwargs[field_name] = self._parse_dataclass(inner_type, field_value)
+                        kwargs[field_name] = self._parse_dataclass(
+                            inner_type, field_value
+                        )
                     else:
                         kwargs[field_name] = field_value
                 else:
