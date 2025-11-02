@@ -42,7 +42,7 @@ class DiscordScrapeBot(commands.Bot):
         self.consent_service = ConsentService(self.db_service)
         self.message_service = MessageService(self.db_service, self.consent_service)
         self.backfill_service = BackfillService(self.message_service)
-        
+
         # Link backfill service to consent service for retroactive collection
         self.consent_service.backfill_service = self.backfill_service
 
@@ -57,7 +57,9 @@ class DiscordScrapeBot(commands.Bot):
         # Register commands
         register_backfill_commands(self.tree, self.backfill_service)
         register_admin_commands(self.tree)
-        register_consent_commands(self.tree, self.consent_service, self.backfill_service)
+        register_consent_commands(
+            self.tree, self.consent_service, self.backfill_service
+        )
 
         logger.info("Bot setup complete")
 
@@ -78,7 +80,9 @@ class DiscordScrapeBot(commands.Bot):
                 logger.info(f"Guild {guild.name}: Last boot at {last_boot}")
 
                 # Catch up on missed messages for this guild
-                await self.backfill_service.catch_up_guild_messages(guild, after=last_boot)
+                await self.backfill_service.catch_up_guild_messages(
+                    guild, after=last_boot
+                )
             else:
                 logger.info(
                     f"Guild {guild.name}: New guild detected - "

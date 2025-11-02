@@ -49,11 +49,11 @@ class BackfillService:
         return success_messages, failed_messages
 
     async def backfill_channel(
-        self, 
-        channel: discord.TextChannel, 
-        after: Optional[datetime] = None, 
+        self,
+        channel: discord.TextChannel,
+        after: Optional[datetime] = None,
         before: Optional[datetime] = None,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
     ) -> tuple[int, int]:
         """Backfill messages for a single channel, optionally filtering by user"""
         channel_success = 0
@@ -73,7 +73,7 @@ class BackfillService:
                 # Skip if filtering by user and message is not from that user
                 if user_id and message.author.id != user_id:
                     continue
-                    
+
                 try:
                     await self.message_service.log_message(message, is_catchup=True)
                     channel_success += 1
@@ -139,7 +139,10 @@ class BackfillService:
         return success_messages, failed_messages, target_channels
 
     async def backfill_all_guilds(
-        self, guilds: list[discord.Guild], after: Optional[datetime] = None, before: Optional[datetime] = None
+        self,
+        guilds: list[discord.Guild],
+        after: Optional[datetime] = None,
+        before: Optional[datetime] = None,
     ) -> tuple[int, int]:
         """Backfill messages for all guilds"""
         total_success = 0
@@ -148,7 +151,9 @@ class BackfillService:
         for guild in guilds:
             logger.info(f"Backfilling guild: {guild.name}")
 
-            guild_success, guild_failed = await self.catch_up_guild_messages(guild, after)
+            guild_success, guild_failed = await self.catch_up_guild_messages(
+                guild, after
+            )
 
             total_success += guild_success
             total_failed += guild_failed
@@ -168,13 +173,13 @@ class BackfillService:
         before: Optional[datetime] = None,
     ) -> tuple[int, int]:
         """Backfill all messages from a specific user in a guild
-        
+
         Args:
             guild: The Discord guild to search
             user_id: The user ID to backfill messages for
             after: Only fetch messages after this datetime (e.g., user's join date)
             before: Only fetch messages before this datetime
-            
+
         Returns:
             Tuple of (success_count, failed_count)
         """
@@ -182,7 +187,7 @@ class BackfillService:
             f"Backfilling messages for user {user_id} in guild {guild.name} "
             f"(after: {after}, before: {before})"
         )
-        
+
         success_messages = 0
         failed_messages = 0
 

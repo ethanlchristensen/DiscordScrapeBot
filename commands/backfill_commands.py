@@ -11,7 +11,9 @@ from utils import admin_only
 logger = logging.getLogger(__name__)
 
 
-def register_backfill_commands(tree: app_commands.CommandTree, backfill_service: BackfillService):
+def register_backfill_commands(
+    tree: app_commands.CommandTree, backfill_service: BackfillService
+):
     """Register all backfill-related commands to the command tree"""
 
     @app_commands.command(
@@ -137,7 +139,10 @@ def register_backfill_commands(tree: app_commands.CommandTree, backfill_service:
             last_update_time = asyncio.get_event_loop().time()
 
             for channel in target_channels:
-                channel_success, channel_failed = await backfill_service.backfill_channel(
+                (
+                    channel_success,
+                    channel_failed,
+                ) = await backfill_service.backfill_channel(
                     channel, from_datetime, to_datetime
                 )
                 success_messages += channel_success
@@ -264,7 +269,10 @@ def register_backfill_commands(tree: app_commands.CommandTree, backfill_service:
             )
 
             # Perform backfill
-            success_messages, failed_messages = await backfill_service.backfill_channels(
+            (
+                success_messages,
+                failed_messages,
+            ) = await backfill_service.backfill_channels(
                 target_channels, from_datetime, to_datetime
             )
 
@@ -357,10 +365,12 @@ def register_backfill_commands(tree: app_commands.CommandTree, backfill_service:
                     target_categories.append(cat)
 
             # Perform backfill
-            success_messages, failed_messages, target_channels = (
-                await backfill_service.backfill_categories(
-                    target_categories, from_datetime, to_datetime
-                )
+            (
+                success_messages,
+                failed_messages,
+                target_channels,
+            ) = await backfill_service.backfill_categories(
+                target_categories, from_datetime, to_datetime
             )
 
             if not target_channels:

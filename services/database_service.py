@@ -98,7 +98,12 @@ class DatabaseService:
         )
 
     async def store_file_in_gridfs(
-        self, file_data: bytes, filename: str, message_id: int, attachment_id: int, content_type: str
+        self,
+        file_data: bytes,
+        filename: str,
+        message_id: int,
+        attachment_id: int,
+        content_type: str,
     ):
         """Store a file in GridFS"""
         loop = asyncio.get_event_loop()
@@ -133,7 +138,10 @@ class DatabaseService:
         await loop.run_in_executor(
             self.executor,
             lambda: self.user_consent_collection.update_one(
-                {"guild_id": consent_record["guild_id"], "user_id": consent_record["user_id"]},
+                {
+                    "guild_id": consent_record["guild_id"],
+                    "user_id": consent_record["user_id"],
+                },
                 {"$set": consent_record},
                 upsert=True,
             ),
@@ -180,20 +188,22 @@ class DatabaseService:
     async def delete_user_attachments(self, guild_id: int, user_id: int):
         """Delete all GridFS attachments for a user in a specific guild"""
         loop = asyncio.get_event_loop()
-        
+
         # Find all messages with attachments stored in GridFS
         messages = await loop.run_in_executor(
             self.executor,
-            lambda: list(self.messages_collection.find(
-                {
-                    "guild_id": guild_id,
-                    "author_id": user_id,
-                    "attachments.storage": "gridfs"
-                },
-                {"attachments": 1}
-            ))
+            lambda: list(
+                self.messages_collection.find(
+                    {
+                        "guild_id": guild_id,
+                        "author_id": user_id,
+                        "attachments.storage": "gridfs",
+                    },
+                    {"attachments": 1},
+                )
+            ),
         )
-        
+
         # Delete each GridFS file
         for message in messages:
             for attachment in message.get("attachments", []):
@@ -202,11 +212,12 @@ class DatabaseService:
                     if gridfs_id:
                         try:
                             await loop.run_in_executor(
-                                self.executor,
-                                lambda: self.fs.delete(gridfs_id)
+                                self.executor, lambda: self.fs.delete(gridfs_id)
                             )
                         except Exception as e:
-                            logger.error(f"Failed to delete GridFS file {gridfs_id}: {e}")
+                            logger.error(
+                                f"Failed to delete GridFS file {gridfs_id}: {e}"
+                            )
 
     def close(self):
         """Close database connections"""

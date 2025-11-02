@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 
 import discord
 
@@ -32,7 +31,9 @@ class MessageService:
             "author_name": message.author.name,
             "author_discriminator": message.author.discriminator,
             "author_bot": message.author.bot,
-            "content": message.content if consent_level >= 2 else "[REDACTED - No consent]",
+            "content": message.content
+            if consent_level >= 2
+            else "[REDACTED - No consent]",
             "consent_level": consent_level,
             "timestamp": message.created_at,
             "edited_timestamp": message.edited_at,
@@ -137,26 +138,26 @@ class MessageService:
             # Check user consent
             elif self.consent_service and message.guild:
                 has_consent = await self.consent_service.has_consent(
-                    message.guild.id, 
-                    message.author.id
+                    message.guild.id, message.author.id
                 )
-                
+
                 if not has_consent:
                     # No consent - don't log
                     return
-                
+
                 # Get the consent level
                 consent_record = await self.consent_service.get_user_consent(
-                    message.guild.id,
-                    message.author.id
+                    message.guild.id, message.author.id
                 )
-                consent_level = consent_record.get("consent_level", 1) if consent_record else 1
+                consent_level = (
+                    consent_record.get("consent_level", 1) if consent_record else 1
+                )
             else:
                 # No consent service or no guild - don't log user messages
                 if not message.author.bot:
                     return
                 consent_level = 3
-            
+
             payload = self.generate_message_payload(message, is_catchup, consent_level)
 
             # Download attachments if present and consent level allows
@@ -180,7 +181,7 @@ class MessageService:
                         "size": att.size,
                         "content_type": att.content_type,
                         "redacted": True,
-                        "reason": "Insufficient consent level"
+                        "reason": "Insufficient consent level",
                     }
                     for att in message.attachments
                 ]
@@ -271,7 +272,12 @@ class MessageService:
             logger.error(f"Error processing bulk message delete: {e}")
 
     async def handle_reaction_change(
-        self, message: discord.Message, reaction_type: str, emoji: str, user_id: int, user_name: str
+        self,
+        message: discord.Message,
+        reaction_type: str,
+        emoji: str,
+        user_id: int,
+        user_name: str,
     ):
         """Handle reaction add/remove event"""
         try:
