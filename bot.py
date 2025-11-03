@@ -56,7 +56,7 @@ class DiscordScrapeBot(commands.Bot):
 
         # Register commands
         register_backfill_commands(self.tree, self.backfill_service)
-        register_admin_commands(self.tree)
+        register_admin_commands(self.tree, self.consent_service, self.backfill_service)
         register_consent_commands(
             self.tree, self.consent_service, self.backfill_service
         )
