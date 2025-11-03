@@ -127,16 +127,19 @@ def register_admin_commands(
             # Get consent details
             consent_level = ConsentLevel(consent_record.get("consent_level", 0))
             backfill_historical = consent_record.get("backfill_historical", False)
-            user_joined_at = consent_record.get("user_joined_at")
+            # Check both new and old field names for backward compatibility
+            backfill_from_date = consent_record.get(
+                "backfill_from_date"
+            ) or consent_record.get("user_joined_at")
             consented_at = consent_record.get("consented_at")
 
             # Determine backfill time range
-            if force_full and user_joined_at:
-                after = user_joined_at
+            if force_full and backfill_from_date:
+                after = backfill_from_date
                 backfill_type = "Full historical backfill (FORCED)"
-            elif backfill_historical and user_joined_at:
-                after = user_joined_at
-                backfill_type = "Full historical backfill (from join date)"
+            elif backfill_historical and backfill_from_date:
+                after = backfill_from_date
+                backfill_type = "Full historical backfill (from guild creation)"
             elif consented_at:
                 after = consented_at
                 backfill_type = "Partial backfill (from consent date)"
