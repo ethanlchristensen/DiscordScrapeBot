@@ -70,7 +70,7 @@ class ConsentService:
             consent_level: Consent level to grant
             initials: User confirmation (username)
             backfill_historical: Whether to backfill historical messages
-            joined_at: User's join date in guild (used for backfill)
+            joined_at: Guild creation date (used for backfill to capture all messages)
 
         Returns:
             The consent record
@@ -89,7 +89,7 @@ class ConsentService:
         }
 
         if joined_at:
-            consent_record["user_joined_at"] = joined_at
+            consent_record["backfill_from_date"] = joined_at
 
         await self.db.upsert_user_consent(consent_record)
         logger.info(

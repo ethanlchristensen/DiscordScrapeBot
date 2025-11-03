@@ -207,9 +207,10 @@ class ConsentModal(discord.ui.Modal, title="🤖 Jade Data Collection Consent"):
                 )
                 return
 
-            # Get user's join date in this guild
-            member = interaction.guild.get_member(interaction.user.id)
-            joined_at = member.joined_at if member else None
+            # Get guild creation date for historical backfill
+            # Using guild creation instead of user join date ensures we capture
+            # all messages even if user left and rejoined
+            guild_created_at = interaction.guild.created_at
 
             # Grant consent
             await self.consent_service.grant_consent(
@@ -220,7 +221,7 @@ class ConsentModal(discord.ui.Modal, title="🤖 Jade Data Collection Consent"):
                 consent_level=self.consent_level,
                 initials=entered_username,  # Store username instead of initials
                 backfill_historical=self.backfill_historical,
-                joined_at=joined_at,
+                joined_at=guild_created_at,
             )
 
             # Send confirmation
@@ -255,9 +256,9 @@ class ConsentModal(discord.ui.Modal, title="🤖 Jade Data Collection Consent"):
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
             # Trigger backfill if requested
-            if self.backfill_historical and self.backfill_service and joined_at:
+            if self.backfill_historical and self.backfill_service:
                 await interaction.followup.send(
-                    "🔄 Starting retroactive message collection... This may take a while depending on your message history.",
+                    "🔄 Starting retroactive message collection from guild creation... This may take a while depending on your message history.",
                     ephemeral=True,
                 )
 
@@ -268,7 +269,7 @@ class ConsentModal(discord.ui.Modal, title="🤖 Jade Data Collection Consent"):
                     ) = await self.backfill_service.backfill_user_messages(
                         guild=interaction.guild,
                         user_id=interaction.user.id,
-                        after=joined_at,
+                        after=guild_created_at,
                     )
 
                     await interaction.followup.send(
@@ -453,7 +454,7 @@ class ConsentInfoView(discord.ui.View):
             ),
             discord.SelectOption(
                 label="Yes - Include past messages",
-                description="Collect all messages since you joined the server",
+                description="Collect all messages since guild creation",
                 value="true",
                 emoji="📜",
             ),
