@@ -18,10 +18,18 @@ def register_consent_commands(
     """Register all consent-related commands to the command tree"""
 
     @app_commands.command(
-        name="consent", description="Give consent for the Jade bot to log your messages"
+        name="consent",
+        description="Update your consent preferences (e.g., upgrade to Level 3 or enable backfill)",
     )
     async def give_consent(interaction: discord.Interaction):
-        """Show consent information and modal to user"""
+        """Show consent information and modal to user
+
+        Note: Messages are logged at Level 2 (Content) by default.
+        Use this command to:
+        - Upgrade to Level 3 (Full - includes attachments)
+        - Enable retroactive message collection (backfill)
+        - Update your preferences
+        """
         if not interaction.guild:
             await interaction.response.send_message(
                 "❌ This command can only be used in a server!", ephemeral=True
@@ -30,10 +38,10 @@ def register_consent_commands(
 
         # Show information about consent levels with a button to proceed
         embed = discord.Embed(
-            title="🤖 Jade AI Data Collection Consent",
+            title="🤖 Jade AI Data Collection - Update Preferences",
             description=(
-                "Jade uses logged messages to improve its AI features. "
-                "Your consent helps make Jade smarter!"
+                "📌 **Auto-Consent Enabled**: Your messages are logged by default at Level 3 (Full).\n\n"
+                "Use this command to change your consent level or enable retroactive collection."
             ),
             color=discord.Color.blue(),
         )
@@ -42,9 +50,9 @@ def register_consent_commands(
             value=(
                 "**Level 1 - Metadata Only**\n"
                 "└ Log when you send messages (timestamp, channel)\n\n"
-                "**Level 2 - Content** ⭐ Recommended\n"
+                "**Level 2 - Content**\n"
                 "└ Level 1 + your message text\n\n"
-                "**Level 3 - Full**\n"
+                "**Level 3 - Full** ⭐ Default\n"
                 "└ Level 2 + attachments (images, files)\n"
             ),
             inline=False,
@@ -52,15 +60,15 @@ def register_consent_commands(
         embed.add_field(
             name="🔒 Your Privacy Rights",
             value=(
-                "• Data is used **only** to enhance Jade's AI\n"
-                "• You can change or revoke consent anytime\n"
+                "• You are **auto-consented** at Level 2 by default\n"
+                "• Use `/revoke_consent` to opt-out completely\n"
                 "• Revoking deletes **all** your logged data\n"
                 "• Bot messages are always logged (not affected by consent)"
             ),
             inline=False,
         )
         embed.set_footer(
-            text="Select your consent level and click the button to proceed"
+            text="Select your preferences below to upgrade or enable backfill"
         )
 
         view = ConsentInfoView(consent_service, interaction.user, backfill_service)
@@ -77,46 +85,65 @@ def register_consent_commands(
             )
             return
 
+        # Get effective consent level (includes auto-consent)
+        effective_level = await consent_service.get_effective_consent_level(
+            interaction.guild.id, interaction.user.id
+        )
+
         consent_record = await consent_service.get_user_consent(
             interaction.guild.id, interaction.user.id
         )
 
-        if not consent_record or not consent_record.get("consent_active", False):
+        # Check if user has explicitly revoked consent
+        if effective_level == ConsentLevel.NONE:
             await interaction.response.send_message(
-                "ℹ️ You have **not given consent** for data collection.\n\n"
+                "🚫 You have **opted out** of data collection.\n\n"
                 "Your messages are **not being logged**.\n\n"
-                "Use `/consent` to give consent if you'd like to help improve Jade's AI features.",
+                "To opt back in, you would need to remove your opt-out status (contact an admin).",
                 ephemeral=True,
             )
             return
 
-        consent_level = ConsentLevel(consent_record.get("consent_level", 0))
-        consented_at = consent_record.get("consented_at")
+        # Determine if consent is explicit or auto
+        is_explicit = consent_record is not None and consent_record.get(
+            "consent_active", False
+        )
+        consent_type = "Explicit" if is_explicit else "Auto-Consent (Default)"
 
-        level_description = consent_service.get_consent_level_description(consent_level)
+        level_description = consent_service.get_consent_level_description(
+            effective_level
+        )
 
         embed = discord.Embed(
             title="✅ Your Consent Status",
-            description="You have given consent for data collection.",
-            color=discord.Color.green(),
+            description=f"**Consent Type:** {consent_type}",
+            color=discord.Color.green() if is_explicit else discord.Color.blue(),
         )
         embed.add_field(
             name="📊 Consent Level",
-            value=f"**{consent_level.name}** (Level {consent_level.value})",
+            value=f"**{effective_level.name}** (Level {effective_level.value})",
             inline=False,
         )
         embed.add_field(
             name="📝 What's Being Logged", value=level_description, inline=False
         )
-        if consented_at:
+
+        if is_explicit and consent_record.get("consented_at"):
             embed.add_field(
-                name="📅 Consented On",
-                value=f"<t:{int(consented_at.timestamp())}:F>",
+                name="📅 Explicitly Consented On",
+                value=f"<t:{int(consent_record['consented_at'].timestamp())}:F>",
                 inline=False,
             )
-        embed.set_footer(
-            text="Use /revoke_consent to withdraw your consent at any time"
+
+        embed.add_field(
+            name="💡 Options",
+            value=(
+                "• Use `/consent` to upgrade to Level 3 or enable backfill\n"
+                "• Use `/revoke_consent` to opt-out completely and delete all data"
+            ),
+            inline=False,
         )
+        embed.set_footer(text="Auto-consent is enabled by default at Level 3 (Full)")
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -132,16 +159,24 @@ def register_consent_commands(
             )
             return
 
-        # Check if user has given consent
-        consent_record = await consent_service.get_user_consent(
+        # Check effective consent level
+        effective_level = await consent_service.get_effective_consent_level(
             interaction.guild.id, interaction.user.id
         )
 
-        if not consent_record or not consent_record.get("consent_active", False):
-            await interaction.response.send_message(
-                "ℹ️ You have not given consent, so there's nothing to revoke.",
-                ephemeral=True,
+        # If already revoked
+        if effective_level == ConsentLevel.NONE:
+            consent_record = await consent_service.get_user_consent(
+                interaction.guild.id, interaction.user.id
             )
+            revoked_at = consent_record.get("revoked_at") if consent_record else None
+
+            message = "ℹ️ You have **already opted out** of data collection.\n\n"
+            if revoked_at:
+                message += f"Revoked on: <t:{int(revoked_at.timestamp())}:F>\n\n"
+            message += "Your future messages are not being logged."
+
+            await interaction.response.send_message(message, ephemeral=True)
             return
 
         # Show confirmation view
@@ -150,11 +185,11 @@ def register_consent_commands(
         )
 
         await interaction.response.send_message(
-            "⚠️ **Are you sure you want to revoke consent?**\n\n"
+            "⚠️ **Are you sure you want to opt-out and delete your data?**\n\n"
             "This will:\n"
-            "• Stop logging your future messages\n"
+            "• **Stop logging** your future messages (opt-out from auto-consent)\n"
             "• **Permanently delete** all your previously logged messages and attachments\n"
-            "• Remove your consent record\n\n"
+            "• Mark your account as opted-out\n\n"
             "**This action cannot be undone!**\n\n"
             "Click the button below to confirm within 60 seconds.",
             view=view,
@@ -399,11 +434,11 @@ class ConsentInfoView(discord.ui.View):
         self.consent_service = consent_service
         self.user = user
         self.backfill_service = backfill_service
-        self.selected_level = ConsentLevel.CONTENT  # Default to Level 2
+        self.selected_level = ConsentLevel.FULL  # Default to Level 3
         self.backfill_historical = False  # Default to no backfill
 
     @discord.ui.select(
-        placeholder="Choose your consent level (Default: Level 2 - Content)",
+        placeholder="Choose your consent level (Default: Level 3 - Full)",
         options=[
             discord.SelectOption(
                 label="Level 1 - Metadata Only",
@@ -412,17 +447,17 @@ class ConsentInfoView(discord.ui.View):
                 emoji="📊",
             ),
             discord.SelectOption(
-                label="Level 2 - Content (Recommended)",
+                label="Level 2 - Content",
                 description="Metadata + message text",
                 value="2",
-                emoji="⭐",
-                default=True,
+                emoji="📝",
             ),
             discord.SelectOption(
-                label="Level 3 - Full",
+                label="Level 3 - Full (Default)",
                 description="Content + attachments (images, files)",
                 value="3",
-                emoji="📦",
+                emoji="⭐",
+                default=True,
             ),
         ],
         row=0,

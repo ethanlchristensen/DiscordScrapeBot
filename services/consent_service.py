@@ -37,17 +37,26 @@ class ConsentService:
         user_id: int,
         required_level: ConsentLevel = ConsentLevel.METADATA_ONLY,
     ) -> bool:
-        """Check if user has given consent at or above the required level"""
+        """Check if user has given consent at or above the required level
+
+        Default behavior: Auto-consent enabled (opt-out model)
+        - Users have consent by default at FULL level (Level 3)
+        - Only returns False if user has explicitly revoked consent
+        """
         consent_record = await self.get_user_consent(guild_id, user_id)
 
         if not consent_record:
+            # No record = auto-consent enabled at FULL level by default
+            return ConsentLevel.FULL >= required_level
+
+        # Check if consent is explicitly revoked
+        if not consent_record.get("consent_active", True):
             return False
 
-        # Check if consent is active and meets the required level
-        return (
-            consent_record.get("consent_active", False)
-            and consent_record.get("consent_level", 0) >= required_level
-        )
+        # Check if consent level meets requirement
+        # Default to FULL level if not specified
+        consent_level = consent_record.get("consent_level", ConsentLevel.FULL)
+        return consent_level >= required_level
 
     async def grant_consent(
         self,
@@ -60,7 +69,7 @@ class ConsentService:
         backfill_historical: bool = False,
         joined_at: Optional[datetime] = None,
     ) -> dict:
-        """Grant or update consent for a user
+        """Grant or update consent for a user (explicit opt-in for higher levels or backfill)
 
         Args:
             guild_id: Guild ID
@@ -100,11 +109,34 @@ class ConsentService:
         return consent_record
 
     async def revoke_consent(self, guild_id: int, user_id: int) -> bool:
-        """Revoke consent for a user"""
-        result = await self.db.revoke_user_consent(guild_id, user_id)
+        """Revoke consent for a user (explicit opt-out)
+
+        Creates/updates a consent record with consent_active=False
+        to explicitly opt-out from the auto-consent default
+        """
+        # Get or create consent record
+        consent_record = await self.get_user_consent(guild_id, user_id)
+
+        if not consent_record:
+            # Create new record with revoked status
+            consent_record = {
+                "guild_id": guild_id,
+                "user_id": user_id,
+                "consent_level": ConsentLevel.NONE,
+                "consent_active": False,
+                "revoked_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
+            }
+            await self.db.upsert_user_consent(consent_record)
+            result = True
+        else:
+            # Update existing record to revoked
+            result = await self.db.revoke_user_consent(guild_id, user_id)
 
         if result:
-            logger.info(f"Consent revoked for user {user_id} in guild {guild_id}")
+            logger.info(
+                f"Consent revoked (opt-out) for user {user_id} in guild {guild_id}"
+            )
 
         return result
 
@@ -137,6 +169,29 @@ class ConsentService:
             ConsentLevel.FULL: "Log timestamps, content, and attachments",
         }
         return descriptions.get(level, "Unknown")
+
+    async def get_effective_consent_level(
+        self, guild_id: int, user_id: int
+    ) -> ConsentLevel:
+        """Get the effective consent level for a user
+
+        Returns:
+            - ConsentLevel.FULL (3) by default (auto-consent)
+            - ConsentLevel.NONE (0) if explicitly revoked
+            - User's specified level if explicitly set
+        """
+        consent_record = await self.get_user_consent(guild_id, user_id)
+
+        if not consent_record:
+            # No record = default auto-consent at FULL level
+            return ConsentLevel.FULL
+
+        if not consent_record.get("consent_active", True):
+            # Explicitly revoked
+            return ConsentLevel.NONE
+
+        # Return specified level or default to FULL
+        return ConsentLevel(consent_record.get("consent_level", ConsentLevel.FULL))
 
     def should_log_message_content(self, consent_level: int) -> bool:
         """Check if message content should be logged at this consent level"""
