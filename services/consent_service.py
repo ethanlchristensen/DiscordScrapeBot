@@ -200,3 +200,67 @@ class ConsentService:
     def should_log_attachments(self, consent_level: int) -> bool:
         """Check if attachments should be logged at this consent level"""
         return consent_level >= ConsentLevel.FULL
+
+    async def auto_grant_consent_for_guild_members(
+        self, guild_id: int, guild_name: str, members: list
+    ) -> dict:
+        """Auto-grant full consent for all guild members who don't have a consent record
+
+        This creates explicit consent records in the database for all users,
+        making it easier to track and audit consent status.
+
+        Args:
+            guild_id: Guild ID
+            guild_name: Guild name
+            members: List of discord.Member objects
+
+        Returns:
+            Dictionary with stats about created/existing/skipped records
+        """
+        created = 0
+        existing = 0
+        skipped_bots = 0
+
+        for member in members:
+            # Skip bot accounts
+            if member.bot:
+                skipped_bots += 1
+                continue
+
+            # Check if user already has a consent record
+            existing_consent = await self.get_user_consent(guild_id, member.id)
+
+            if existing_consent:
+                # User already has a consent record (explicit or revoked), don't modify
+                existing += 1
+                continue
+
+            # Create auto-consent record at FULL level
+            consent_record = {
+                "guild_id": guild_id,
+                "guild_name": guild_name,
+                "user_id": member.id,
+                "user_name": member.name,
+                "consent_level": int(ConsentLevel.FULL),
+                "consent_active": True,
+                "initials": "AUTO",
+                "consented_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
+                "backfill_historical": False,
+                "auto_granted": True,  # Flag to indicate this was auto-granted
+            }
+
+            await self.db.upsert_user_consent(consent_record)
+            created += 1
+
+        logger.info(
+            f"Auto-consent for guild {guild_name} ({guild_id}): "
+            f"Created: {created}, Existing: {existing}, Skipped bots: {skipped_bots}"
+        )
+
+        return {
+            "created": created,
+            "existing": existing,
+            "skipped_bots": skipped_bots,
+            "total_processed": len(members),
+        }
