@@ -166,3 +166,4 @@ analyze.ipynb
 debug.ps1
 config.yaml
 *.backup
+*.ruff_cache/
