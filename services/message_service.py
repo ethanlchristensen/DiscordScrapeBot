@@ -132,18 +132,18 @@ class MessageService:
     async def log_message(self, message: discord.Message, is_catchup: bool = False):
         """Log a message to the database with consent checking
 
-        Auto-consent model:
+        Consent model:
         - Bot messages: Always logged at FULL level
-        - User messages: Logged at FULL level by default (auto-consent)
-        - Users can explicitly opt-out via /revoke_consent
+        - User messages: Logged based on their consent record (auto-granted on first message/bot startup)
+        - Users can revoke consent via /revoke_consent
         """
         try:
             # Always log bot messages at full level
             if message.author.bot:
                 consent_level = 3
-            # Check user consent (with auto-consent enabled)
+            # Check user consent
             elif self.consent_service and message.guild:
-                # Get effective consent level (defaults to FULL if not explicitly revoked)
+                # Get effective consent level
                 effective_level = (
                     await self.consent_service.get_effective_consent_level(
                         message.guild.id, message.author.id
@@ -156,7 +156,7 @@ class MessageService:
 
                 consent_level = int(effective_level)
             else:
-                # No consent service or no guild - default to FULL level for user messages
+                # No consent service or no guild - default to FULL level
                 consent_level = 3
 
             payload = self.generate_message_payload(message, is_catchup, consent_level)
@@ -193,31 +193,14 @@ class MessageService:
             await self.db.upsert_message(payload)
 
             if not is_catchup:
-                consent_type = (
-                    "auto"
-                    if not await self._has_explicit_consent(message)
-                    else "explicit"
-                )
                 logger.info(
                     f"Logged message {message.id} from {message.author.name} in {message.channel.name} "
-                    f"(consent level: {consent_level}, type: {consent_type})"
+                    f"(consent level: {consent_level})"
                 )
 
         except Exception as e:
             logger.error(f"Error logging message {message.id}: {e}")
             raise
-
-    async def _has_explicit_consent(self, message: discord.Message) -> bool:
-        """Check if user has explicitly granted consent (vs auto-consent)"""
-        if not self.consent_service or not message.guild:
-            return False
-
-        consent_record = await self.consent_service.get_user_consent(
-            message.guild.id, message.author.id
-        )
-        return consent_record is not None and consent_record.get(
-            "consent_active", False
-        )
 
     async def handle_message_edit(
         self, before: discord.Message, after: discord.Message

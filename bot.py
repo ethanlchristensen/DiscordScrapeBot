@@ -7,7 +7,7 @@ from discord.ext import commands
 
 from services import ConfigService
 from services.database_service import DatabaseService
-from services.consent_service import ConsentService
+from services.consent_service import ConsentService, ConsentLevel
 from services.message_service import MessageService
 from services.backfill_service import BackfillService, DEFAULT_LOOKBACK_DATE
 from commands.backfill_commands import register_backfill_commands
@@ -73,6 +73,22 @@ class DiscordScrapeBot(commands.Bot):
 
         # Process each guild
         for guild in self.guilds:
+            logger.info(f"Processing guild: {guild.name} ({guild.id})")
+
+            # Auto-grant full consent for all guild members
+            logger.info(f"Auto-granting consent for members in {guild.name}...")
+            consent_stats = (
+                await self.consent_service.auto_grant_consent_for_guild_members(
+                    guild.id, guild.name, guild.members
+                )
+            )
+            logger.info(
+                f"Consent auto-grant complete for {guild.name}: "
+                f"Created {consent_stats['created']}, "
+                f"Existing {consent_stats['existing']}, "
+                f"Skipped bots {consent_stats['skipped_bots']}"
+            )
+
             guild_status = await self.db_service.get_guild_status(guild.id)
 
             if guild_status and guild_status.get("last_boot"):
@@ -123,6 +139,26 @@ class DiscordScrapeBot(commands.Bot):
         # Don't log messages from this bot
         if message.author == self.user:
             return
+
+        # Auto-grant consent for new users who don't have a record yet
+        if message.guild and not message.author.bot:
+            consent_record = await self.consent_service.get_user_consent(
+                message.guild.id, message.author.id
+            )
+            if not consent_record:
+                # New user without consent record - auto-grant full consent
+                await self.consent_service.grant_consent(
+                    guild_id=message.guild.id,
+                    guild_name=message.guild.name,
+                    user_id=message.author.id,
+                    user_name=message.author.name,
+                    consent_level=ConsentLevel.FULL,
+                    initials="AUTO",
+                    backfill_historical=False,
+                )
+                logger.info(
+                    f"Auto-granted full consent for new user {message.author.name} ({message.author.id})"
+                )
 
         # Log message (consent is checked inside log_message)
         await self.message_service.log_message(message)

@@ -40,8 +40,8 @@ def register_consent_commands(
         embed = discord.Embed(
             title="🤖 Jade AI Data Collection - Update Preferences",
             description=(
-                "📌 **Auto-Consent Enabled**: Your messages are logged by default at Level 3 (Full).\n\n"
-                "Use this command to change your consent level or enable retroactive collection."
+                "📌 **Default Consent**: All users are granted Level 3 (Full) consent automatically.\n\n"
+                "Use this command to change your consent level or enable retroactive message collection."
             ),
             color=discord.Color.blue(),
         )
@@ -60,7 +60,7 @@ def register_consent_commands(
         embed.add_field(
             name="🔒 Your Privacy Rights",
             value=(
-                "• You are **auto-consented** at Level 2 by default\n"
+                "• All users are granted **Level 3 (Full)** consent by default\n"
                 "• Use `/revoke_consent` to opt-out completely\n"
                 "• Revoking deletes **all** your logged data\n"
                 "• Bot messages are always logged (not affected by consent)"
@@ -104,11 +104,20 @@ def register_consent_commands(
             )
             return
 
-        # Determine if consent is explicit or auto
-        is_explicit = consent_record is not None and consent_record.get(
-            "consent_active", False
+            # Determine if consent was auto-granted or explicitly updated
+        is_auto_granted = consent_record and consent_record.get("auto_granted", False)
+        is_explicit = (
+            consent_record is not None
+            and consent_record.get("consent_active", False)
+            and not is_auto_granted
         )
-        consent_type = "Explicit" if is_explicit else "Auto-Consent (Default)"
+
+        if is_auto_granted:
+            consent_type = "Auto-Granted (Default)"
+        elif is_explicit:
+            consent_type = "Explicitly Updated"
+        else:
+            consent_type = "Default"
 
         level_description = consent_service.get_consent_level_description(
             effective_level
@@ -128,9 +137,16 @@ def register_consent_commands(
             name="📝 What's Being Logged", value=level_description, inline=False
         )
 
-        if is_explicit and consent_record.get("consented_at"):
+        if consent_record and consent_record.get("consented_at"):
+            timestamp_label = (
+                "Auto-Granted On"
+                if is_auto_granted
+                else "Updated On"
+                if is_explicit
+                else "Consented On"
+            )
             embed.add_field(
-                name="📅 Explicitly Consented On",
+                name=f"📅 {timestamp_label}",
                 value=f"<t:{int(consent_record['consented_at'].timestamp())}:F>",
                 inline=False,
             )
@@ -138,12 +154,109 @@ def register_consent_commands(
         embed.add_field(
             name="💡 Options",
             value=(
-                "• Use `/consent` to upgrade to Level 3 or enable backfill\n"
+                "• Use `/change_consent_level` to change your level (keeps your data)\n"
+                "• Use `/consent` to enable backfill for historical messages\n"
                 "• Use `/revoke_consent` to opt-out completely and delete all data"
             ),
             inline=False,
         )
         embed.set_footer(text="Auto-consent is enabled by default at Level 3 (Full)")
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(
+        name="change_consent_level",
+        description="Change your consent level without deleting your data",
+    )
+    @app_commands.describe(
+        level="Select your new consent level (1=Metadata, 2=Content, 3=Full)"
+    )
+    @app_commands.choices(
+        level=[
+            app_commands.Choice(name="Level 1 - Metadata Only", value=1),
+            app_commands.Choice(name="Level 2 - Content (Message Text)", value=2),
+            app_commands.Choice(name="Level 3 - Full (Content + Attachments)", value=3),
+        ]
+    )
+    async def change_consent_level(interaction: discord.Interaction, level: int):
+        """Change consent level without deleting existing data"""
+        if not interaction.guild:
+            await interaction.response.send_message(
+                "❌ This command can only be used in a server!", ephemeral=True
+            )
+            return
+
+        # Get current consent
+        consent_record = await consent_service.get_user_consent(
+            interaction.guild.id, interaction.user.id
+        )
+
+        # Check if user has opted out
+        if consent_record and not consent_record.get("consent_active", True):
+            await interaction.response.send_message(
+                "❌ You have opted out of data collection.\n\n"
+                "Please contact an admin to restore your consent before changing levels.",
+                ephemeral=True,
+            )
+            return
+
+        new_level = ConsentLevel(level)
+        current_level = await consent_service.get_effective_consent_level(
+            interaction.guild.id, interaction.user.id
+        )
+
+        if current_level == new_level:
+            await interaction.response.send_message(
+                f"ℹ️ You are already at **{new_level.name}** (Level {new_level.value}).",
+                ephemeral=True,
+            )
+            return
+
+        # Update consent level (this updates the record without deleting data)
+        await consent_service.grant_consent(
+            guild_id=interaction.guild.id,
+            guild_name=interaction.guild.name,
+            user_id=interaction.user.id,
+            user_name=interaction.user.name,
+            consent_level=new_level,
+            initials="UPDATED",
+            backfill_historical=False,
+        )
+
+        level_description = consent_service.get_consent_level_description(new_level)
+
+        # Determine if upgrade or downgrade
+        change_type = "upgraded" if new_level > current_level else "downgraded"
+
+        embed = discord.Embed(
+            title=f"✅ Consent Level {change_type.title()}",
+            description=f"Your consent level has been {change_type} successfully.",
+            color=discord.Color.green(),
+        )
+        embed.add_field(
+            name="Previous Level",
+            value=f"**{current_level.name}** (Level {current_level.value})",
+            inline=True,
+        )
+        embed.add_field(
+            name="New Level",
+            value=f"**{new_level.name}** (Level {new_level.value})",
+            inline=True,
+        )
+        embed.add_field(
+            name="📝 What Will Be Logged",
+            value=level_description,
+            inline=False,
+        )
+        embed.add_field(
+            name="ℹ️ Important",
+            value=(
+                "• Your **existing data is preserved**\n"
+                "• Future messages will be logged at the new level\n"
+                "• Use `/revoke_consent` to delete all data and opt-out"
+            ),
+            inline=False,
+        )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -199,6 +312,7 @@ def register_consent_commands(
     # Register commands
     tree.add_command(give_consent)
     tree.add_command(check_consent_status)
+    tree.add_command(change_consent_level)
     tree.add_command(revoke_consent)
 
 
