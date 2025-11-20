@@ -165,10 +165,11 @@ class MessageService:
             if message.attachments and consent_level >= 3:
                 attachments_data = []
                 for attachment in message.attachments:
-                    attachment_data = await self.download_attachment(
-                        attachment, message.id
-                    )
-                    attachments_data.append(attachment_data)
+                    if attachment.content_type.startswith("image/"): # only download image attachments
+                        attachment_data = await self.download_attachment(
+                            attachment, message.id
+                        )
+                        attachments_data.append(attachment_data)
                 payload["attachments"] = attachments_data
                 logger.info(
                     f"Downloaded {len(attachments_data)} attachments for message {message.id}"
