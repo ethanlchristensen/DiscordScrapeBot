@@ -43,13 +43,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Checkout Secrets Prod
-        run: cp -r /home/ethan/source/repos/DiscordScrapeBot/config.yaml ./config.yaml
+        run: cp -r /home/ethan/source/repos/bruh.scrape/config.yaml ./config.yaml
 
       - name: Deploy Prod with Docker Compose
         run: |
           echo "Stopping existing prod services (if any)..."
-          docker compose down discord-scrape-bot --remove-orphans || true
+          docker compose down bruh.scrape --remove-orphans || true
           echo "Building and starting prod services..."
-          docker compose up -d --build discord-scrape-bot
+          docker compose up -d --build bruh.scrape
           echo "Cleaning up old Docker images..."
           docker image prune -af

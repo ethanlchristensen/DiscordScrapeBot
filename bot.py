@@ -21,7 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class DiscordScrapeBot(commands.Bot):
+class BruhScrape(commands.Bot):
     """Discord bot for scraping and archiving messages"""
 
     def __init__(self):
@@ -216,7 +216,7 @@ class DiscordScrapeBot(commands.Bot):
 
 async def main():
     """Main entry point for the bot"""
-    bot = DiscordScrapeBot()
+    bot = BruhScrape()
 
     try:
         await bot.start(bot.config.discordToken)

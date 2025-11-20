@@ -1,5 +1,5 @@
 services:
-  discord-scrape-bot:
+  bruh.scrape:
     build: .
-    container_name: discord-scrape-bot
+    container_name: bruh.scarpe
     restart: unless-stopped
